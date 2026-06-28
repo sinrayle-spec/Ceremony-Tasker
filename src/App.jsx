@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import LockScreen from './components/LockScreen';
 import Navigation from './components/Navigation';
-import TimerSection from './components/TimerSection';
 import CalendarSection from './components/CalendarSection';
 import TaskSection from './components/TaskSection';
 import GallerySection from './components/GallerySection';
@@ -9,9 +8,8 @@ import { useEncryptedStorage } from './hooks/useLocalStorage';
 
 export default function App() {
   const [passcode, setPasscode] = useState(null); // PIN入力されると解除
-  const [activeTab, setActiveTab] = useState('timer'); // 'timer', 'calendar', 'tasks', 'gallery'
+  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks', 'calendar', 'gallery'
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [activeTaskId, setActiveTaskId] = useState(null);
 
   // 暗号化対応のカスタムストレージでタスク一覧を管理
   const [tasks, setTasks] = useEncryptedStorage('ct_tasks', [], passcode);
@@ -51,7 +49,7 @@ export default function App() {
 
   const handleLock = () => {
     setPasscode(null);
-    setActiveTab('timer'); // リセット
+    setActiveTab('tasks'); // リセット
   };
 
   // タスク操作関数
@@ -71,17 +69,13 @@ export default function App() {
 
   const handleDeleteTask = (id) => {
     if (window.confirm('この案件を完全に削除してもよろしいですか？')) {
-      if (activeTaskId === id) {
-        setActiveTaskId(null);
-      }
       setTasks(prevTasks => prevTasks.filter(t => t.id !== id));
     }
   };
 
-  // カレンダーからタスクをタップして詳細確認/タイマー連携する
+  // カレンダーからタスクをタップして詳細確認へ遷移
   const handleSelectTaskFromCalendar = (task) => {
-    setActiveTaskId(task.id);
-    setActiveTab('timer'); // タイマー画面に移動して連携
+    setActiveTab('tasks'); // 案件タブへ移動
   };
 
   // ロック解除されていない場合はロック画面を表示
@@ -112,11 +106,12 @@ export default function App() {
 
       {/* メインコンテンツエリア */}
       <main className="app-content">
-        {activeTab === 'timer' && (
-          <TimerSection 
+        {activeTab === 'tasks' && (
+          <TaskSection 
             tasks={tasks} 
-            activeTaskId={activeTaskId} 
-            setActiveTaskId={setActiveTaskId} 
+            onAddTask={handleAddTask}
+            onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
           />
         )}
         {activeTab === 'calendar' && (
@@ -125,14 +120,6 @@ export default function App() {
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             onSelectTask={handleSelectTaskFromCalendar}
-          />
-        )}
-        {activeTab === 'tasks' && (
-          <TaskSection 
-            tasks={tasks} 
-            onAddTask={handleAddTask}
-            onUpdateTask={handleUpdateTask}
-            onDeleteTask={handleDeleteTask}
           />
         )}
         {activeTab === 'gallery' && (
