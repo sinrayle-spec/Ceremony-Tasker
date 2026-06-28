@@ -1,23 +1,42 @@
 import React, { useState } from 'react';
 
 export default function GallerySection({ tasks }) {
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImageObj, setSelectedImageObj] = useState(null);
   const [zoomScale, setZoomScale] = useState(1);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-  // 画像が添付されているタスクのみをフィルタリング
-  const tasksWithImages = tasks.filter(t => t.hasImage && t.imageData);
+  // すべてのタスクから添付画像をフラットに展開してリスト化する（複数添付・互換性フォールバック両対応）
+  const allAttachedImages = [];
+  tasks.forEach(task => {
+    if (task.images && Array.isArray(task.images)) {
+      task.images.forEach((imgObj, idx) => {
+        allAttachedImages.push({
+          id: imgObj.id || `${task.id}_img_${idx}`,
+          data: imgObj.data,
+          taskTitle: task.title,
+          taskDate: task.date
+        });
+      });
+    } else if (task.imageData) {
+      allAttachedImages.push({
+        id: `${task.id}_img_migrated`,
+        data: task.imageData,
+        taskTitle: task.title,
+        taskDate: task.date
+      });
+    }
+  });
 
-  const openFullscreen = (task) => {
-    setSelectedImage(task);
+  const openFullscreen = (imgObj) => {
+    setSelectedImageObj(imgObj);
     setZoomScale(1);
     setDragOffset({ x: 0, y: 0 });
   };
 
   const closeFullscreen = () => {
-    setSelectedImage(null);
+    setSelectedImageObj(null);
   };
 
   const handleZoomIn = () => setZoomScale(prev => Math.min(prev + 0.25, 3));
@@ -27,7 +46,7 @@ export default function GallerySection({ tasks }) {
     setDragOffset({ x: 0, y: 0 });
   };
 
-  // ドラッグ操作によるパン（位置移動）処理
+  // ドラッグ操作によるパン
   const handleTouchStart = (e) => {
     if (zoomScale === 1) return;
     const touch = e.touches[0];
@@ -53,7 +72,7 @@ export default function GallerySection({ tasks }) {
       <h2 className="gallery-title">打合せ書面（写真）一覧</h2>
       <p className="gallery-desc">案件に紐づく見積書、配置図、進行表などを安全に確認できます。</p>
 
-      {tasksWithImages.length === 0 ? (
+      {allAttachedImages.length === 0 ? (
         <div className="no-images-placeholder">
           <svg className="no-img-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -65,18 +84,18 @@ export default function GallerySection({ tasks }) {
         </div>
       ) : (
         <div className="gallery-grid">
-          {tasksWithImages.map((task) => (
+          {allAttachedImages.map((imgObj) => (
             <div 
-              key={task.id} 
+              key={imgObj.id} 
               className="gallery-card"
-              onClick={() => openFullscreen(task)}
+              onClick={() => openFullscreen(imgObj)}
             >
               <div className="gallery-img-wrapper">
-                <img src={task.imageData} alt={task.title} className="gallery-thumb" />
+                <img src={imgObj.data} alt={imgObj.taskTitle} className="gallery-thumb" />
               </div>
               <div className="gallery-info">
-                <span className="gallery-task-title">{task.title}</span>
-                <span className="gallery-task-date">📅 {task.date}</span>
+                <span className="gallery-task-title">{imgObj.taskTitle}</span>
+                <span className="gallery-task-date">📅 {imgObj.taskDate}</span>
               </div>
             </div>
           ))}
@@ -84,13 +103,13 @@ export default function GallerySection({ tasks }) {
       )}
 
       {/* フルスクリーンモーダル */}
-      {selectedImage && (
+      {selectedImageObj && (
         <div className="fullscreen-overlay">
           {/* ヘッダー操作バー */}
           <div className="fullscreen-header">
             <div className="header-info">
-              <span className="overlay-title">{selectedImage.title}</span>
-              <span className="overlay-date">📅 {selectedImage.date} の打合せ書面</span>
+              <span className="overlay-title">{selectedImageObj.taskTitle}</span>
+              <span className="overlay-date">📅 {selectedImageObj.taskDate} の打合せ書面</span>
             </div>
             <button onClick={closeFullscreen} className="close-overlay-btn">
               ✕ 閉じる
@@ -105,7 +124,7 @@ export default function GallerySection({ tasks }) {
             onTouchEnd={handleTouchEnd}
           >
             <img 
-              src={selectedImage.imageData} 
+              src={selectedImageObj.data} 
               alt="打合せ書面" 
               className="fullscreen-img"
               style={{
@@ -119,9 +138,11 @@ export default function GallerySection({ tasks }) {
 
           {/* ズームコントローラー */}
           <div className="zoom-controls">
-            <button onClick={handleZoomOut} className="zoom-btn">-</button>
-            <button onClick={handleZoomReset} className="zoom-btn reset">等倍</button>
-            <button onClick={handleZoomIn} className="zoom-btn">+</button>
+            <div className="zoom-btn-row">
+              <button onClick={handleZoomOut} className="zoom-btn">-</button>
+              <button onClick={handleZoomReset} className="zoom-btn reset">等倍</button>
+              <button onClick={handleZoomIn} className="zoom-btn">+</button>
+            </div>
             {zoomScale > 1 && <span className="zoom-indicator">ズーム中 ({Math.round(zoomScale * 100)}%) / ドラッグで移動</span>}
           </div>
         </div>

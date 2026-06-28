@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
+import ImageEditorModal from './ImageEditorModal';
 
 export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTask }) {
   const [isAdding, setIsAdding] = useState(false);
@@ -13,7 +14,9 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
   const [category, setCategory] = useState('打合せ');
   const [color, setColor] = useState('blue');
   const [notes, setNotes] = useState('');
-  const [imageData, setImageData] = useState(null); // 圧縮済みのBase64画像
+  
+  // 複数写真添付の状態 (配列: [{ id: 'img_xxx', data: 'base64...' }])
+  const [taskImages, setTaskImages] = useState([]);
   
   // OCR（文字読み取り）の状態
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -22,28 +25,28 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
   const [showOcrPanel, setShowOcrPanel] = useState(false);
 
   // 拡大プレビュー用の状態
-  const [previewImage, setPreviewImage] = useState(null);
+  const [previewImageObj, setPreviewImageObj] = useState(null);
+
+  // 赤入れ（画像編集）モーダルの状態
+  const [editingImageObj, setEditingImageObj] = useState(null);
 
   // --- カウントダウンタイマー ＆ アラーム制御 ---
   const [now, setNow] = useState(new Date());
-  const [ringingTaskIds, setRingingTaskIds] = useState([]); // アラーム鳴動中のタスクID
-  const [rungTaskIds, setRungTaskIds] = useState([]);       // アラーム鳴動済みのタスクID
+  const [ringingTaskIds, setRingingTaskIds] = useState([]);
+  const [rungTaskIds, setRungTaskIds] = useState([]);
 
   const audioCtxRef = useRef(null);
   const beepIntervalRef = useRef(null);
 
-  // 毎秒更新とアラーム発動の判定
   useEffect(() => {
     const timer = setInterval(() => {
       const current = new Date();
       setNow(current);
       
-      // 未完了の案件のアラーム判定
       tasks.forEach(task => {
         if (task.status !== 'completed' && task.date && task.time) {
           const taskTime = new Date(`${task.date}T${task.time}:00`).getTime();
           
-          // 期限に達した、かつ1分以内の遅れ（大昔のタスクの誤検知防止）、かつ未鳴動
           if (current.getTime() >= taskTime && 
               current.getTime() - taskTime < 60000 && 
               !rungTaskIds.includes(task.id) && 
@@ -52,7 +55,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
             setRingingTaskIds(prev => [...prev, task.id]);
             setRungTaskIds(prev => [...prev, task.id]);
             
-            // スマホバイブレーション
             if ('vibrate' in navigator) {
               navigator.vibrate([500, 250, 500, 250, 500]);
             }
@@ -64,7 +66,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     return () => clearInterval(timer);
   }, [tasks, rungTaskIds, ringingTaskIds]);
 
-  // アラーム電子音のループ再生
   useEffect(() => {
     if (ringingTaskIds.length > 0) {
       if (!beepIntervalRef.current) {
@@ -79,7 +80,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = 'square';
-            osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 (880Hz)
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
             
             gain.gain.setValueAtTime(0, ctx.currentTime);
             gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.02);
@@ -96,7 +97,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         };
 
         playBeep();
-        beepIntervalRef.current = setInterval(playBeep, 1000); // 1秒間隔でピピピ
+        beepIntervalRef.current = setInterval(playBeep, 1000);
       }
     } else {
       if (beepIntervalRef.current) {
@@ -123,7 +124,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     }
   };
 
-  // 残り時間（カウントダウン）を計算・整形する関数
   const getCountdownText = (task) => {
     if (!task.date || !task.time) return '時間未設定';
     
@@ -151,20 +151,10 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     return `${pad(mins)}分 ${pad(secs)}秒`;
   };
 
-  // --- タスク操作・フォーム制御 ---
+  // --- 複数写真・アノテーション対応の追加機能 ---
 
-  const handleCategoryChange = (cat) => {
-    setCategory(cat);
-    switch (cat) {
-      case '施行': setColor('red'); break;
-      case '打合せ': setColor('blue'); break;
-      case '事前相談': setColor('green'); break;
-      case '法要': setColor('purple'); break;
-      default: setColor('blue');
-    }
-  };
-
-  const compressAndSetImage = (file) => {
+  // 写真データを圧縮するヘルパー
+  const compressImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -194,13 +184,25 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     });
   };
 
-  const handleImageChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const compressed = await compressAndSetImage(file);
-    setImageData(compressed);
+  // 複数写真のアップロード追加
+  const handleMultipleImagesChange = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    const newCompressedList = await Promise.all(
+      files.map(async (file) => {
+        const base64 = await compressImage(file);
+        return {
+          id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          data: base64
+        };
+      })
+    );
+
+    setTaskImages(prev => [...prev, ...newCompressedList]);
   };
 
+  // OCR用ファイルの処理と画像自動添付
   const handleOcrFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -210,8 +212,13 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     setOcrResult('');
     
     try {
-      const compressedBase64 = await compressAndSetImage(file);
-      setImageData(compressedBase64);
+      const compressedBase64 = await compressImage(file);
+      const newImgObj = {
+        id: `img_${Date.now()}`,
+        data: compressedBase64
+      };
+      // 画像リストへ自動添付
+      setTaskImages(prev => [...prev, newImgObj]);
 
       const worker = await createWorker('jpn', 1, {
         logger: m => {
@@ -232,6 +239,48 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     }
   };
 
+  // 添付画像の個別削除
+  const removeAttachedImage = (id) => {
+    setTaskImages(prev => prev.filter(img => img.id !== id));
+  };
+
+  // 画像編集（赤入れ）モーダルの起動
+  const startImageEdit = (imgObj) => {
+    setEditingImageObj(imgObj);
+  };
+
+  // 赤入れした画像の保存
+  const saveEditedImage = (editedBase64) => {
+    setTaskImages(prev => 
+      prev.map(img => img.id === editingImageObj.id ? { ...img, data: editedBase64 } : img)
+    );
+    setEditingImageObj(null);
+  };
+
+  // 互換性フォールバック（旧単一画像データを複数画像配列に自動マイグレーション）
+  const getTaskImagesArray = (task) => {
+    if (task.images && Array.isArray(task.images)) {
+      return task.images;
+    }
+    if (task.imageData) {
+      return [{ id: 'img_migrated', data: task.imageData }];
+    }
+    return [];
+  };
+
+  // --- タスクフォーム送信・制御 ---
+
+  const handleCategoryChange = (cat) => {
+    setCategory(cat);
+    switch (cat) {
+      case '施行': setColor('red'); break;
+      case '打合せ': setColor('blue'); break;
+      case '事前相談': setColor('green'); break;
+      case '法要': setColor('purple'); break;
+      default: setColor('blue');
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -244,8 +293,8 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         category,
         color,
         notes,
-        imageData,
-        hasImage: !!imageData
+        images: taskImages,
+        hasImage: taskImages.length > 0
       });
       setEditingTaskId(null);
     } else {
@@ -256,8 +305,8 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         category,
         color,
         notes,
-        imageData,
-        hasImage: !!imageData,
+        images: taskImages,
+        hasImage: taskImages.length > 0,
         status: 'active'
       });
       setIsAdding(false);
@@ -273,7 +322,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     setCategory('打合せ');
     setColor('blue');
     setNotes('');
-    setImageData(null);
+    setTaskImages([]);
     setOcrResult('');
     setShowOcrPanel(false);
   };
@@ -286,7 +335,10 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     setCategory(task.category || '打合せ');
     setColor(task.color || 'blue');
     setNotes(task.notes || '');
-    setImageData(task.imageData || null);
+    
+    // 画像配列のマイグレーション対応
+    setTaskImages(getTaskImagesArray(task));
+    
     setIsAdding(true);
   };
 
@@ -302,15 +354,12 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     });
   };
 
-  // タスクの期限のタイムスタンプを取得して比較用にする関数
   const getTaskTimestamp = (task) => {
-    if (!task.date) return Infinity; // 期限なしは一番後ろ
+    if (!task.date) return Infinity;
     const timeStr = task.time || '00:00';
     return new Date(`${task.date}T${timeStr}:00`).getTime();
   };
 
-  // 1. 完了/未完了でフィルタ
-  // 2. 期限が近い順（タイムスタンプの昇順）にソートして並び替える
   const filteredTasks = tasks.filter(t => 
     activeTab === 'active' ? t.status !== 'completed' : t.status === 'completed'
   ).sort((a, b) => getTaskTimestamp(a) - getTaskTimestamp(b));
@@ -350,6 +399,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                 const hasTime = task.date && task.time;
                 const countdown = getCountdownText(task);
                 const isExpired = countdown === '⚠️ 期限超過';
+                const currentImages = getTaskImagesArray(task);
 
                 return (
                   <div 
@@ -360,7 +410,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                     `}
                     style={{ borderLeftColor: `var(--color-${task.color || 'blue'})` }}
                   >
-                    {/* アラーム鳴動中の演出 */}
                     {isRinging && <div className="alarm-flashing-overlay" />}
 
                     <div className="task-card-header">
@@ -392,7 +441,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                       <span className={`badge badge-${task.color || 'blue'}`}>{task.category}</span>
                     </div>
 
-                    {/* タスク内カウントダウンタイマー表示（未完了のみ） */}
+                    {/* カウントダウン表示タイマー */}
                     {task.status !== 'completed' && hasTime && (
                       <div className={`task-card-countdown-timer ${isExpired ? 'expired' : ''}`}>
                         <svg className="timer-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -407,12 +456,20 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
                     {task.notes && <p className="task-card-notes">{task.notes}</p>}
                     
-                    {/* 書面インライン表示 */}
-                    {task.hasImage && task.imageData && (
+                    {/* 複数書面のインライン横スクロール表示 */}
+                    {currentImages.length > 0 && (
                       <div className="task-card-image-attachment">
-                        <div className="attachment-label">📎 添付書面（タップで拡大）:</div>
-                        <div className="task-thumbnail-wrapper" onClick={() => setPreviewImage(task)}>
-                          <img src={task.imageData} alt="添付書面サムネイル" className="task-card-thumbnail" />
+                        <div className="attachment-label">📎 添付書面（{currentImages.length}枚 - タップで拡大）:</div>
+                        <div className="task-thumbnails-scroll-container">
+                          {currentImages.map((imgObj, index) => (
+                            <div 
+                              key={imgObj.id || index} 
+                              className="task-thumbnail-wrapper-multiple" 
+                              onClick={() => setPreviewImageObj(imgObj)}
+                            >
+                              <img src={imgObj.data} alt={`添付書面 ${index + 1}`} className="task-card-thumbnail" />
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -473,6 +530,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
               />
             </div>
 
+            {/* 写真添付 ＆ OCR ＆ 赤入れ編集 セクション */}
             <div className="ocr-upload-section">
               <div className="section-title-row">
                 <h3>打合せ書面（写真）の添付</h3>
@@ -552,19 +610,41 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                     <input 
                       type="file" 
                       accept="image/*" 
-                      onChange={handleImageChange} 
+                      multiple 
+                      onChange={handleMultipleImagesChange} 
                       id="normal-file-picker" 
                     />
                     <label htmlFor="normal-file-picker" className="file-picker-label">
-                      📁 写真を添付 / カメラ撮影
+                      📁 写真を追加添付 / カメラで複数撮影
                     </label>
                   </div>
-                  {imageData && (
-                    <div className="image-preview-container">
-                      <img src={imageData} alt="添付プレビュー" className="attached-img-preview" />
-                      <button type="button" onClick={() => setImageData(null)} className="remove-img-btn">
-                        添付を削除
-                      </button>
+
+                  {/* 添付画像のサムネイル一覧 ＆ 赤入れボタン ＆ 削除ボタン */}
+                  {taskImages.length > 0 && (
+                    <div className="form-images-preview-list">
+                      {taskImages.map((imgObj, idx) => (
+                        <div key={imgObj.id} className="preview-image-item-wrapper">
+                          <img src={imgObj.data} alt="サムネイル" className="form-preview-thumb" />
+                          <div className="preview-actions-overlay">
+                            <button 
+                              type="button" 
+                              onClick={() => startImageEdit(imgObj)} 
+                              className="img-edit-action-btn"
+                              title="赤入れ（注釈）"
+                            >
+                              ✏️ 赤入れ
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => removeAttachedImage(imgObj.id)} 
+                              className="img-remove-action-btn"
+                              title="削除"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -579,21 +659,30 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
       )}
 
       {/* インライン画像拡大モーダル */}
-      {previewImage && (
-        <div className="preview-modal-overlay" onClick={() => setPreviewImage(null)}>
+      {previewImageObj && (
+        <div className="preview-modal-overlay" onClick={() => setPreviewImageObj(null)}>
           <div className="preview-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="preview-modal-header">
-              <span className="preview-modal-title">{previewImage.title} の添付書面</span>
-              <button className="preview-modal-close" onClick={() => setPreviewImage(null)}>✕</button>
+              <span className="preview-modal-title">添付書面 拡大プレビュー</span>
+              <button className="preview-modal-close" onClick={() => setPreviewImageObj(null)}>✕</button>
             </div>
             <div className="preview-modal-img-container">
-              <img src={previewImage.imageData} alt="拡大書面" className="preview-modal-img" />
+              <img src={previewImageObj.data} alt="拡大書面" className="preview-modal-img" />
             </div>
             <div className="preview-modal-footer">
               ピンチイン・アウト、またはドラッグでスクロールしてご確認いただけます。
             </div>
           </div>
         </div>
+      )}
+
+      {/* 画像編集（赤入れ・注釈）モーダル */}
+      {editingImageObj && (
+        <ImageEditorModal
+          imageData={editingImageObj.data}
+          onSave={saveEditedImage}
+          onClose={() => setEditingImageObj(null)}
+        />
       )}
 
       <style>{`
@@ -676,7 +765,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           opacity: 0.5;
         }
 
-        /* アラーム鳴動中のカードスタイル */
         .task-card.alarm-ringing {
           border-color: var(--color-red) !important;
           box-shadow: 0 0 15px rgba(225, 29, 72, 0.4);
@@ -785,7 +873,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           color: var(--text-secondary);
         }
 
-        /* カウントダウン表示タイマー */
         .task-card-countdown-timer {
           display: flex;
           align-items: center;
@@ -831,6 +918,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           z-index: 2;
         }
 
+        /* 複数書面カルーセル */
         .task-card-image-attachment {
           margin-top: 10px;
           border-top: 1px solid rgba(255,255,255,0.05);
@@ -845,22 +933,29 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           margin-bottom: 6px;
         }
 
-        .task-thumbnail-wrapper {
-          display: inline-block;
+        .task-thumbnails-scroll-container {
+          display: flex;
+          gap: 10px;
+          overflow-x: auto;
+          padding-bottom: 6px;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .task-thumbnail-wrapper-multiple {
+          flex-shrink: 0;
+          width: 90px;
+          height: 70px;
           border-radius: 6px;
           overflow: hidden;
           border: 1px solid var(--border-color);
           cursor: pointer;
-          max-width: 120px;
-          max-height: 90px;
           background-color: #000;
         }
 
         .task-card-thumbnail {
           display: block;
           width: 100%;
-          height: auto;
-          max-height: 90px;
+          height: 100%;
           object-fit: cover;
         }
 
@@ -981,103 +1076,76 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           cursor: pointer;
         }
 
-        .ocr-progress-bar-container {
-          background-color: rgba(0,0,0,0.2);
-          border-radius: 8px;
-          padding: 12px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .ocr-loading-spinner {
-          width: 24px;
-          height: 24px;
-          border: 3px solid rgba(217, 119, 6, 0.1);
-          border-top-color: var(--color-gold);
-          border-radius: 50%;
-          animation: spin 1s infinite linear;
-        }
-
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-
-        .ocr-progress-text {
-          font-size: 12px;
-          font-weight: 600;
-          color: var(--color-gold-light);
-        }
-
-        .ocr-progress-track {
-          width: 100%;
-          height: 6px;
-          background-color: var(--bg-primary);
-          border-radius: 3px;
-          overflow: hidden;
-        }
-
-        .ocr-progress-fill {
-          height: 100%;
-          background-color: var(--color-gold);
-          transition: width 0.1s ease;
-        }
-
-        .ocr-result-container {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          margin-top: 10px;
-        }
-
-        .ocr-result-textarea {
-          font-size: 13px;
-          background-color: var(--bg-primary);
-          border-color: var(--border-color);
-          line-height: 1.4;
-        }
-
-        .ocr-action-buttons {
+        /* フォームプレビュー画像一覧 */
+        .form-images-preview-list {
           display: flex;
           gap: 10px;
+          overflow-x: auto;
+          padding: 12px 0 4px;
         }
 
-        .ocr-fill-btn {
-          flex: 1;
-          background-color: var(--bg-tertiary);
-          border: 1px solid var(--border-color);
-          color: var(--text-primary);
-          padding: 8px;
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 600;
-        }
-
-        .image-preview-container {
+        .preview-image-item-wrapper {
           position: relative;
-          margin-top: 10px;
-        }
-
-        .attached-img-preview {
-          width: 100%;
-          max-height: 120px;
-          object-fit: cover;
+          flex-shrink: 0;
+          width: 100px;
+          height: 80px;
           border-radius: 8px;
+          overflow: hidden;
           border: 1px solid var(--border-color);
+          background-color: #000;
         }
 
-        .remove-img-btn {
+        .form-preview-thumb {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .preview-actions-overlay {
           position: absolute;
-          top: 6px;
-          right: 6px;
-          background-color: rgba(225, 29, 72, 0.8);
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0,0,0,0.5);
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          padding: 4px;
+          opacity: 0;
+          transition: opacity 0.15s;
+        }
+
+        .preview-image-item-wrapper:hover .preview-actions-overlay,
+        .preview-image-item-wrapper:active .preview-actions-overlay {
+          opacity: 1; /* タップ時やホバー時に操作ボタンを表示 */
+        }
+
+        .img-edit-action-btn {
+          width: 100%;
+          background-color: var(--color-gold);
+          color: white;
+          font-size: 9px;
+          font-weight: 700;
+          padding: 4px 0;
+          border-radius: 4px;
+          text-align: center;
+        }
+
+        .img-remove-action-btn {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background-color: var(--color-red);
           color: white;
           font-size: 10px;
           font-weight: 700;
-          padding: 4px 8px;
-          border-radius: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .submit-task-btn {

@@ -11,7 +11,7 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
   const firstDayOfMonth = new Date(year, month, 1);
   const lastDayOfMonth = new Date(year, month + 1, 0);
 
-  // 月の最初の日が何曜日か（0:日, 1:月, ...）
+  // 月の最初の日が何曜日か
   const startDayOfWeek = firstDayOfMonth.getDay();
   // 月の日数
   const totalDays = lastDayOfMonth.getDate();
@@ -32,10 +32,10 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
     onSelectDate(newSelected);
   };
 
-  // カレンダーの日付セルを構築するデータ
+  // カレンダーグリッドデータ構築 (6行＝42セル)
   const cells = [];
 
-  // 前月の日付で埋める
+  // 前月
   for (let i = startDayOfWeek - 1; i >= 0; i--) {
     cells.push({
       day: prevMonthLastDay - i,
@@ -44,7 +44,7 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
     });
   }
 
-  // 今月の日付
+  // 今月
   for (let i = 1; i <= totalDays; i++) {
     cells.push({
       day: i,
@@ -53,7 +53,7 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
     });
   }
 
-  // 翌月の日付で埋める（グリッドが6行分＝42セルになるように）
+  // 翌月
   const remainingCells = 42 - cells.length;
   for (let i = 1; i <= remainingCells; i++) {
     cells.push({
@@ -63,7 +63,6 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
     });
   }
 
-  // 指定した日付に登録されているタスクを取得
   const getTasksForDate = (dateObj) => {
     const dateStr = dateObj.toISOString().split('T')[0];
     return tasks.filter(t => t.date === dateStr);
@@ -104,7 +103,7 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
         ))}
       </div>
 
-      {/* カレンダー本体 */}
+      {/* カレンダーグリッド */}
       <div className="days-grid">
         {cells.map((cell, idx) => {
           const dateTasks = getTasksForDate(cell.dateObj);
@@ -126,25 +125,31 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
               `}
               onClick={() => cell.isCurrentMonth && handleDateClick(cell.day)}
             >
-              <div className="day-number">{cell.day}</div>
-              
-              {/* 六曜ラベル (今月の日のみ表示) */}
-              {cell.isCurrentMonth && (
-                <div className={`rokuyo-label ${isTomobiki ? 'tomobiki-text' : ''}`}>
-                  {rokuyo.name}
-                </div>
-              )}
+              <div className="day-top-row">
+                <div className="day-number">{cell.day}</div>
+                {/* 六曜ラベル */}
+                {cell.isCurrentMonth && (
+                  <div className={`rokuyo-label ${isTomobiki ? 'tomobiki-text' : ''}`}>
+                    {rokuyo.name}
+                  </div>
+                )}
+              </div>
 
-              {/* タスク色分けドット */}
-              <div className="task-dots">
+              {/* 改善された予定カラーバー (複数予定を積み重ね表示) */}
+              <div className="task-bars">
                 {dateTasks.slice(0, 3).map((task) => (
-                  <span
+                  <div
                     key={task.id}
-                    className="task-dot"
+                    className="task-bar"
                     style={{ backgroundColor: `var(--color-${task.color || 'blue'})` }}
+                    title={task.title}
                   />
                 ))}
-                {dateTasks.length > 3 && <span className="task-dot-more">+</span>}
+                {dateTasks.length > 3 && (
+                  <div className="task-bar-more">
+                    +{dateTasks.length - 3}件
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -181,7 +186,9 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
                   {task.notes && <p className="selected-task-notes">{task.notes}</p>}
                   <div className="selected-task-footer">
                     {task.time && <span className="selected-task-time">🕒 {task.time}</span>}
-                    {task.hasImage && <span className="image-attached-indicator">📎 書面あり</span>}
+                    {task.images && task.images.length > 0 && (
+                      <span className="image-attached-indicator">📎 書面 ({task.images.length}枚) あり</span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -239,7 +246,7 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
         .days-grid {
           display: grid;
           grid-template-columns: repeat(7, 1fr);
-          grid-auto-rows: 64px;
+          grid-auto-rows: 68px; /* 少し高さを広げてバーを収まりやすく */
           gap: 4px;
           margin-bottom: 20px;
         }
@@ -271,10 +278,16 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
           box-shadow: 0 0 8px var(--border-glow);
         }
 
-        /* 友引ハイライト: 薄い金色のグラデーション枠と背景 */
         .day-cell.tomobiki-highlight {
           background-color: rgba(217, 119, 6, 0.04);
           border: 1px solid rgba(217, 119, 6, 0.25);
+        }
+
+        .day-top-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          width: 100%;
         }
 
         .day-number {
@@ -285,8 +298,7 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
         .rokuyo-label {
           font-size: 9px;
           color: var(--text-muted);
-          text-align: center;
-          margin-top: 1px;
+          text-align: right;
         }
 
         .tomobiki-text {
@@ -294,28 +306,32 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
           font-weight: 700;
         }
 
-        .task-dots {
+        /* 改善された予定カラーバー (複数積み重ね表示) */
+        .task-bars {
           display: flex;
-          justify-content: center;
+          flex-direction: column;
           gap: 2px;
-          height: 6px;
-          margin-bottom: 2px;
+          width: 100%;
+          margin-top: auto;
           overflow: hidden;
         }
 
-        .task-dot {
-          width: 5px;
+        .task-bar {
+          width: 100%;
           height: 5px;
-          border-radius: 50%;
+          border-radius: 2px;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
 
-        .task-dot-more {
+        .task-bar-more {
           font-size: 8px;
           color: var(--text-secondary);
-          line-height: 5px;
+          text-align: center;
+          line-height: 8px;
+          font-weight: 700;
         }
 
-        /* 日付詳細パネル */
+        /* 詳細パネル */
         .selected-day-panel {
           background-color: var(--bg-secondary);
           border-radius: 16px;

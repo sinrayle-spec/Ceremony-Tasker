@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ceremony-tasker-v2';
+const CACHE_NAME = 'ceremony-tasker-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
