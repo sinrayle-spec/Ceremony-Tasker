@@ -1,53 +1,58 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 export default function TimerSection({ tasks, activeTaskId, setActiveTaskId }) {
-  const [mode, setMode] = useState('stopwatch'); // 'stopwatch' or 'countdown'
-  const [time, setTime] = useState(0); // 秒単位
-  const [isRunning, setIsRunning] = useState(false);
-  const [countdownStart, setCountdownStart] = useState(600); // デフォルト10分 (600秒)
-  
+  const [timeLeft, setTimeLeft] = useState(0); // 秒単位の残り時間
+  const [isAlarmActive, setIsAlarmActive] = useState(false);
   const timerRef = useRef(null);
   const audioCtxRef = useRef(null);
 
-  // モード切り替え時の処理
-  useEffect(() => {
-    setIsRunning(false);
-    if (timerRef.current) clearInterval(timerRef.current);
-    
-    if (mode === 'stopwatch') {
-      setTime(0);
-    } else {
-      setTime(countdownStart);
-    }
-  }, [mode, countdownStart]);
+  // 選択中の案件を取得
+  const selectedTask = tasks.find(t => t.id === activeTaskId);
 
-  // タイマー動作処理
+  // 案件の期限までの残り時間を計算する関数
+  const calculateTimeLeft = () => {
+    if (!selectedTask || !selectedTask.date) return 0;
+    
+    // 期限の日時文字列を作成 (日付 + 時間)
+    const timeStr = selectedTask.time || '00:00';
+    const deadline = new Date(`${selectedTask.date}T${timeStr}:00`);
+    const now = new Date();
+    
+    const diffMs = deadline.getTime() - now.getTime();
+    return diffMs > 0 ? Math.floor(diffMs / 1000) : 0;
+  };
+
+  // 案件が変更された、またはタイマーが走るときの処理
   useEffect(() => {
-    if (isRunning) {
-      timerRef.current = setInterval(() => {
-        setTime((prevTime) => {
-          if (mode === 'stopwatch') {
-            return prevTime + 1;
-          } else {
-            if (prevTime <= 1) {
-              // カウントダウン終了
-              setIsRunning(false);
-              clearInterval(timerRef.current);
-              triggerAlarm();
-              return 0;
-            }
-            return prevTime - 1;
+    if (timerRef.current) clearInterval(timerRef.current);
+    setIsAlarmActive(false);
+
+    if (selectedTask) {
+      const initialLeft = calculateTimeLeft();
+      setTimeLeft(initialLeft);
+
+      if (initialLeft > 0) {
+        timerRef.current = setInterval(() => {
+          const left = calculateTimeLeft();
+          setTimeLeft(left);
+          
+          if (left <= 0) {
+            clearInterval(timerRef.current);
+            triggerAlarm();
           }
-        });
-      }, 1000);
+        }, 1000);
+      } else {
+        // すでに期限を過ぎている場合
+        setTimeLeft(0);
+      }
     } else {
-      if (timerRef.current) clearInterval(timerRef.current);
+      setTimeLeft(0);
     }
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning, mode]);
+  }, [activeTaskId, tasks]);
 
   // Web Audio API による電子アラーム音の合成
   const playAlarmSound = () => {
@@ -57,6 +62,9 @@ export default function TimerSection({ tasks, activeTaskId, setActiveTaskId }) {
       }
       
       const audioCtx = audioCtxRef.current;
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
       const now = audioCtx.currentTime;
       
       const playBeep = (startTime) => {
@@ -93,150 +101,125 @@ export default function TimerSection({ tasks, activeTaskId, setActiveTaskId }) {
   // バイブレーションの発動
   const triggerVibration = () => {
     if ('vibrate' in navigator) {
-      // 500ms振動、250ms停止、500ms振動...を繰り返す
       navigator.vibrate([500, 250, 500, 250, 500, 250, 500]);
     }
   };
 
-  // アラームトリガー (音 + バイブ + ダイアログ)
+  // アラームトリガー
   const triggerAlarm = () => {
+    setIsAlarmActive(true);
     playAlarmSound();
     triggerVibration();
     
-    // システム通知（パーミッションが許可されていれば）
+    // システム通知
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification('Ceremony Tasker', {
-        body: '設定時間になりました。進行を確認してください。',
+        body: `【期限通知】「${selectedTask.title}」の時刻になりました。`,
         icon: '/icon.svg'
       });
     }
-
-    alert('【Ceremony Tasker アラーム】\n設定時間になりました。進行を確認してください。');
   };
 
-  const handleStartStop = () => {
-    // Web Audio APIの初期化（ユーザー操作に紐づける必要があるため）
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    setIsRunning(!isRunning);
+  const stopAlarm = () => {
+    setIsAlarmActive(false);
   };
 
-  const handleReset = () => {
-    setIsRunning(false);
-    if (mode === 'stopwatch') {
-      setTime(0);
-    } else {
-      setTime(countdownStart);
-    }
-  };
-
-  const handleQuickTime = (seconds) => {
-    setIsRunning(false);
-    setCountdownStart(seconds);
-    setTime(seconds);
-  };
-
-  // 時間フォーマット (MM:SS または HH:MM:SS)
-  const formatTime = (totalSeconds) => {
-    const hrs = Math.floor(totalSeconds / 3600);
+  // 時間フォーマット (DD日 HH時間 MM分 SS秒)
+  const formatCountdown = (totalSeconds) => {
+    if (totalSeconds <= 0) return "00:00:00";
+    
+    const days = Math.floor(totalSeconds / 86400);
+    const hrs = Math.floor((totalSeconds % 86400) / 3600);
     const mins = Math.floor((totalSeconds % 3600) / 60);
     const secs = totalSeconds % 60;
     
     const pad = (n) => n.toString().padStart(2, '0');
     
-    if (hrs > 0) {
-      return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+    if (days > 0) {
+      return `${days}日 ${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
     }
-    return `${pad(mins)}:${pad(secs)}`;
+    return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
   };
 
-  // 選択中のタスク取得
-  const selectedTask = tasks.find(t => t.id === activeTaskId);
+  // Web Audio APIの初期化（ブラウザ制限回避用）
+  const initAudio = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  };
 
   return (
-    <div className="timer-section fade-in">
+    <div className="timer-section fade-in" onClick={initAudio}>
       {/* 連携する案件の選択 */}
       <div className="task-selector-wrapper">
-        <label className="selector-label">現在進行中の案件 (タイマー連携)</label>
+        <label className="selector-label">カウントダウンする案件を選択</label>
         <select 
           value={activeTaskId || ''} 
-          onChange={(e) => setActiveTaskId(e.target.value || null)}
+          onChange={(e) => {
+            initAudio();
+            setActiveTaskId(e.target.value || null);
+          }}
           className="task-select"
         >
-          <option value="">-- 選択しない (単体タイマーとして使用) --</option>
+          <option value="">-- 選択してください --</option>
           {tasks.filter(t => t.status !== 'completed').map((task) => (
             <option key={task.id} value={task.id}>
-              {task.title} ({task.category || '未分類'})
+              {task.title} ({task.date} {task.time || '時間未設定'})
             </option>
           ))}
         </select>
       </div>
 
-      {/* 選択中の案件表示カード */}
-      {selectedTask && (
-        <div 
-          className="active-task-display-card"
-          style={{ borderLeftColor: `var(--color-${selectedTask.color || 'blue'})` }}
-        >
-          <div className="card-top">
-            <span className="task-badge" style={{ backgroundColor: `var(--color-${selectedTask.color || 'blue'})` }}>
-              {selectedTask.category || '案件'}
-            </span>
-            <span className="task-date">📅 {selectedTask.date} {selectedTask.time || ''}</span>
+      {selectedTask ? (
+        <div className="active-task-timer-container">
+          {/* 選択中の案件表示カード */}
+          <div 
+            className="active-task-display-card"
+            style={{ borderLeftColor: `var(--color-${selectedTask.color || 'blue'})` }}
+          >
+            <div className="card-top">
+              <span className="task-badge" style={{ backgroundColor: `var(--color-${selectedTask.color || 'blue'})` }}>
+                {selectedTask.category || '案件'}
+              </span>
+              <span className="task-date">期限: 📅 {selectedTask.date} {selectedTask.time || '00:00'}</span>
+            </div>
+            <div className="task-title-main">{selectedTask.title}</div>
+            {selectedTask.notes && <div className="task-desc">{selectedTask.notes}</div>}
           </div>
-          <div className="task-title-main">{selectedTask.title}</div>
-          {selectedTask.notes && <div className="task-desc">{selectedTask.notes}</div>}
+
+          {/* カウントダウン表示本体 */}
+          <div className="timer-display-container">
+            <div className={`timer-ring ${timeLeft > 0 ? 'running' : 'expired'} ${isAlarmActive ? 'alarm-active' : ''}`}>
+              <div className="timer-time-text">{formatCountdown(timeLeft)}</div>
+              <div className="timer-mode-sublabel">
+                {isAlarmActive ? 'ALARM ACTIVE' : timeLeft > 0 ? 'TIME UNTIL DEADLINE' : 'DEADLINE PASSED'}
+              </div>
+            </div>
+          </div>
+
+          {/* アラーム停止ボタン */}
+          {isAlarmActive && (
+            <button onClick={stopAlarm} className="control-btn stop-alarm-btn">
+              アラーム停止
+            </button>
+          )}
+
+          {timeLeft <= 0 && !isAlarmActive && (
+            <div className="deadline-passed-notice">
+              ⚠️ この案件の期限はすでに経過しています。
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="select-task-placeholder">
+          <svg className="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <p>カウントダウンする案件を選択してください。</p>
+          <span>カレンダーまたは案件タブから選択できます。</span>
         </div>
       )}
-
-      {/* タイマーモード切り替え */}
-      <div className="timer-mode-selector">
-        <button 
-          className={`mode-tab ${mode === 'stopwatch' ? 'active' : ''}`}
-          onClick={() => setMode('stopwatch')}
-        >
-          経過時間 (ストップウォッチ)
-        </button>
-        <button 
-          className={`mode-tab ${mode === 'countdown' ? 'active' : ''}`}
-          onClick={() => setMode('countdown')}
-        >
-          残り時間 (カウントダウン)
-        </button>
-      </div>
-
-      {/* タイマー表示本体 */}
-      <div className="timer-display-container">
-        <div className={`timer-ring ${isRunning ? 'running' : ''}`}>
-          <div className="timer-time-text">{formatTime(time)}</div>
-          <div className="timer-mode-sublabel">{mode === 'stopwatch' ? 'ELAPSED' : 'REMAINING'}</div>
-        </div>
-      </div>
-
-      {/* カウントダウン時間クイック設定 */}
-      {mode === 'countdown' && (
-        <div className="quick-time-buttons">
-          <button onClick={() => handleQuickTime(180)} className="quick-time-btn">3分</button>
-          <button onClick={() => handleQuickTime(300)} className="quick-time-btn">5分</button>
-          <button onClick={() => handleQuickTime(600)} className="quick-time-btn">10分</button>
-          <button onClick={() => handleQuickTime(1800)} className="quick-time-btn">30分</button>
-          <button onClick={() => handleQuickTime(3600)} className="quick-time-btn">60分</button>
-        </div>
-      )}
-
-      {/* 操作ボタン */}
-      <div className="timer-controls">
-        <button onClick={handleReset} className="control-btn reset-btn">
-          リセット
-        </button>
-        <button 
-          onClick={handleStartStop} 
-          className={`control-btn start-btn ${isRunning ? 'stop' : 'start'}`}
-        >
-          {isRunning ? '一時停止' : '開始'}
-        </button>
-      </div>
 
       <style>{`
         .timer-section {
@@ -249,7 +232,7 @@ export default function TimerSection({ tasks, activeTaskId, setActiveTaskId }) {
 
         .task-selector-wrapper {
           width: 100%;
-          margin-bottom: 12px;
+          margin-bottom: 20px;
         }
 
         .selector-label {
@@ -265,10 +248,17 @@ export default function TimerSection({ tasks, activeTaskId, setActiveTaskId }) {
           background-color: var(--bg-secondary);
           border: 1px solid var(--border-color);
           color: var(--text-primary);
-          padding: 10px 14px;
+          padding: 12px 14px;
           border-radius: 8px;
           font-size: 14px;
           width: 100%;
+        }
+
+        .active-task-timer-container {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
         }
 
         .active-task-display-card {
@@ -278,7 +268,7 @@ export default function TimerSection({ tasks, activeTaskId, setActiveTaskId }) {
           border-left: 4px solid var(--color-blue);
           border-radius: 12px;
           padding: 12px 16px;
-          margin-bottom: 20px;
+          margin-bottom: 30px;
           box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
 
@@ -315,43 +305,16 @@ export default function TimerSection({ tasks, activeTaskId, setActiveTaskId }) {
           line-height: 1.4;
         }
 
-        .timer-mode-selector {
-          display: flex;
-          background-color: var(--bg-secondary);
-          padding: 4px;
-          border-radius: 20px;
-          width: 100%;
-          margin-bottom: 24px;
-          border: 1px solid var(--border-color);
-        }
-
-        .mode-tab {
-          flex: 1;
-          padding: 8px 12px;
-          border-radius: 16px;
-          font-size: 12px;
-          font-weight: 600;
-          text-align: center;
-          color: var(--text-secondary);
-        }
-
-        .mode-tab.active {
-          background-color: var(--bg-tertiary);
-          color: var(--text-primary);
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          border: 1px solid rgba(255,255,255,0.05);
-        }
-
         .timer-display-container {
-          margin: 10px 0 24px;
+          margin: 10px 0 30px;
           display: flex;
           justify-content: center;
           align-items: center;
         }
 
         .timer-ring {
-          width: 180px;
-          height: 180px;
+          width: 220px;
+          height: 220px;
           border-radius: 50%;
           border: 6px solid var(--border-color);
           display: flex;
@@ -360,91 +323,99 @@ export default function TimerSection({ tasks, activeTaskId, setActiveTaskId }) {
           align-items: center;
           background-color: rgba(30, 41, 59, 0.2);
           box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
-          transition: border-color 0.3s ease, box-shadow 0.3s ease;
+          transition: all 0.3s ease;
           position: relative;
         }
 
         .timer-ring.running {
           border-color: var(--color-gold);
           box-shadow: 0 0 30px var(--border-glow);
-          animation: pulse 2s infinite ease-in-out;
         }
 
-        @keyframes pulse {
+        .timer-ring.expired {
+          border-color: var(--border-color);
+          opacity: 0.7;
+        }
+
+        .timer-ring.alarm-active {
+          border-color: var(--color-red);
+          box-shadow: 0 0 30px rgba(225, 29, 72, 0.4);
+          animation: ringPulse 0.5s infinite ease-in-out;
+        }
+
+        @keyframes ringPulse {
           0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.02); }
+          50% { transform: scale(1.04); }
         }
 
         .timer-time-text {
-          font-size: 36px;
+          font-size: 28px;
           font-weight: 700;
           font-family: monospace;
           color: var(--text-primary);
           letter-spacing: -0.5px;
+          text-align: center;
         }
 
         .timer-mode-sublabel {
           font-size: 9px;
           font-weight: 700;
           color: var(--text-muted);
-          letter-spacing: 2px;
-          margin-top: 4px;
-        }
-
-        .quick-time-buttons {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 24px;
-          width: 100%;
-          justify-content: center;
-        }
-
-        .quick-time-btn {
-          background-color: var(--bg-secondary);
-          border: 1px solid var(--border-color);
-          color: var(--text-secondary);
-          padding: 6px 12px;
-          border-radius: 8px;
-          font-size: 12px;
-          font-weight: 600;
-        }
-
-        .quick-time-btn:active {
-          border-color: var(--color-gold);
-          color: var(--text-primary);
-        }
-
-        .timer-controls {
-          display: flex;
-          gap: 16px;
-          width: 100%;
-          max-width: 320px;
-          margin-bottom: 20px;
+          letter-spacing: 1px;
+          margin-top: 6px;
         }
 
         .control-btn {
-          flex: 1;
+          width: 100%;
+          max-width: 200px;
           height: 48px;
           border-radius: 24px;
           font-size: 15px;
           font-weight: 700;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          box-shadow: 0 4px 6px rgba(0,0,0,0.15);
         }
 
-        .reset-btn {
-          background-color: var(--bg-secondary);
-          color: var(--text-secondary);
-          border: 1px solid var(--border-color);
-        }
-
-        .start-btn.start {
-          background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
-          color: white;
-        }
-
-        .start-btn.stop {
+        .stop-alarm-btn {
           background: linear-gradient(135deg, var(--color-red), #991b1b);
           color: white;
+        }
+
+        .deadline-passed-notice {
+          color: var(--text-muted);
+          font-size: 12px;
+          font-weight: 500;
+          margin-top: 10px;
+        }
+
+        /* プレースホルダー */
+        .select-task-placeholder {
+          text-align: center;
+          color: var(--text-secondary);
+          padding: 60px 20px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          flex: 1;
+        }
+
+        .placeholder-icon {
+          width: 48px;
+          height: 48px;
+          color: var(--text-muted);
+          margin-bottom: 16px;
+        }
+
+        .select-task-placeholder p {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--text-primary);
+          margin-bottom: 4px;
+        }
+
+        .select-task-placeholder span {
+          font-size: 11px;
+          color: var(--text-muted);
         }
       `}</style>
     </div>

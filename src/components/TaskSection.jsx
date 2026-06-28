@@ -3,9 +3,10 @@ import { createWorker } from 'tesseract.js';
 
 export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTask }) {
   const [isAdding, setIsAdding] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState(null);
   const [activeTab, setActiveTab] = useState('active'); // 'active' or 'completed'
   
-  // フォームの状態
+  // フォーム状態
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState('');
@@ -19,6 +20,9 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrResult, setOcrResult] = useState('');
   const [showOcrPanel, setShowOcrPanel] = useState(false);
+
+  // 拡大プレビュー用の状態
+  const [previewImage, setPreviewImage] = useState(null);
 
   // カテゴリ変更時に自動でカラーを設定する
   const handleCategoryChange = (cat) => {
@@ -83,9 +87,8 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     setOcrResult('');
     
     try {
-      // ローカルで画像を圧縮
       const compressedBase64 = await compressAndSetImage(file);
-      setImageData(compressedBase64); // ついでにタスク画像としても設定
+      setImageData(compressedBase64); // タスク画像として設定
 
       // Tesseract.js のワーカー初期化
       const worker = await createWorker('jpn', 1, {
@@ -107,24 +110,45 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     }
   };
 
-  // フォーム送信
+  // フォーム送信（新規登録 ＆ 編集保存）
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    onAddTask({
-      title,
-      date,
-      time,
-      category,
-      color,
-      notes,
-      imageData,
-      hasImage: !!imageData,
-      status: 'active'
-    });
+    if (editingTaskId) {
+      // 編集の保存
+      onUpdateTask(editingTaskId, {
+        title,
+        date,
+        time,
+        category,
+        color,
+        notes,
+        imageData,
+        hasImage: !!imageData
+      });
+      setEditingTaskId(null);
+    } else {
+      // 新規登録
+      onAddTask({
+        title,
+        date,
+        time,
+        category,
+        color,
+        notes,
+        imageData,
+        hasImage: !!imageData,
+        status: 'active'
+      });
+      setIsAdding(false);
+    }
 
     // フォームリセット
+    resetForm();
+  };
+
+  const resetForm = () => {
     setTitle('');
     setDate(new Date().toISOString().split('T')[0]);
     setTime('');
@@ -134,7 +158,25 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     setImageData(null);
     setOcrResult('');
     setShowOcrPanel(false);
+  };
+
+  // 編集モードに入る
+  const startEdit = (task) => {
+    setEditingTaskId(task.id);
+    setTitle(task.title);
+    setDate(task.date);
+    setTime(task.time || '');
+    setCategory(task.category || '打合せ');
+    setColor(task.color || 'blue');
+    setNotes(task.notes || '');
+    setImageData(task.imageData || null);
+    setIsAdding(true); // フォームを表示
+  };
+
+  const cancelEdit = () => {
+    setEditingTaskId(null);
     setIsAdding(false);
+    resetForm();
   };
 
   // タスク完了切り替え
@@ -170,7 +212,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
               </button>
             </div>
             
-            <button onClick={() => setIsAdding(true)} className="add-task-trigger-btn">
+            <button onClick={() => { setIsAdding(true); setEditingTaskId(null); }} className="add-task-trigger-btn">
               ＋ 新規案件登録
             </button>
           </div>
@@ -192,7 +234,10 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                         onClick={() => toggleComplete(task)} 
                         className={`status-toggle-btn ${task.status === 'completed' ? 'reopen' : 'done'}`}
                       >
-                        {task.status === 'completed' ? '未完了に戻す' : '完了'}
+                        {task.status === 'completed' ? '未完了にする' : '完了'}
+                      </button>
+                      <button onClick={() => startEdit(task)} className="edit-icon-btn" title="編集">
+                        ✏️
                       </button>
                       <button onClick={() => onDeleteTask(task.id)} className="delete-btn" title="削除">
                         🗑️
@@ -201,30 +246,32 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                   </div>
                   
                   <div className="task-card-meta">
-                    <span className="meta-item">📅 {task.date} {task.time || ''}</span>
+                    <span className="meta-item">📅 {task.date} {task.time ? `🕒 ${task.time}` : '🕒 時間未指定'}</span>
                     <span className={`badge badge-${task.color || 'blue'}`}>{task.category}</span>
                   </div>
 
                   {task.notes && <p className="task-card-notes">{task.notes}</p>}
                   
-                  <div className="task-card-footer">
-                    {task.hasImage && (
-                      <span className="file-attached-pill">
-                        📎 打ち合わせ書面 (写真) 添付あり
-                      </span>
-                    )}
-                  </div>
+                  {/* 書面のインライン表示 */}
+                  {task.hasImage && task.imageData && (
+                    <div className="task-card-image-attachment">
+                      <div className="attachment-label">📎 添付書面（タップで拡大）:</div>
+                      <div className="task-thumbnail-wrapper" onClick={() => setPreviewImage(task)}>
+                        <img src={task.imageData} alt="添付書面サムネイル" className="task-card-thumbnail" />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
             )}
           </div>
         </>
       ) : (
-        /* 新規追加フォーム */
+        /* 新規追加 ＆ 編集フォーム */
         <div className="add-task-form-container">
           <div className="form-header">
-            <h2>新規案件登録</h2>
-            <button onClick={() => setIsAdding(false)} className="close-form-btn">キャンセル</button>
+            <h2>{editingTaskId ? '案件情報の編集' : '新規案件登録'}</h2>
+            <button onClick={editingTaskId ? cancelEdit : () => setIsAdding(false)} className="close-form-btn">キャンセル</button>
           </div>
 
           <form onSubmit={handleSubmit} className="task-form">
@@ -241,11 +288,11 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
             <div className="form-row">
               <div className="form-group">
-                <label>日付</label>
+                <label>日付 (期限)</label>
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
               <div className="form-group">
-                <label>時間</label>
+                <label>時間 (アラーム時刻)</label>
                 <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
               </div>
             </div>
@@ -273,7 +320,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
             {/* OCR/写真添付セクション */}
             <div className="ocr-upload-section">
               <div className="section-title-row">
-                <h3>打合せ書面（写真）の追加</h3>
+                <h3>打合せ書面（写真）の添付</h3>
                 <button 
                   type="button" 
                   onClick={() => setShowOcrPanel(!showOcrPanel)} 
@@ -287,19 +334,19 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                 /* OCR文字認識パネル */
                 <div className="ocr-panel">
                   <div className="ocr-desc">
-                    スマートフォンのカメラで打合せの書面（手書き含む）を撮影すると、ローカルAIが文字を抽出し、入力フォームに転記できます。
+                    カメラで書面を撮影すると、ローカルAIが文字を抽出し、フォームに転記できます。画像も自動添付されます。
                   </div>
                   
                   <div className="file-input-wrapper">
                     <input 
                       type="file" 
                       accept="image/*" 
-                      capture="environment" // スマホで直接カメラ起動
+                      capture="environment" 
                       onChange={handleOcrFileChange} 
                       id="ocr-file-picker" 
                     />
                     <label htmlFor="ocr-file-picker" className="file-picker-label">
-                      📷 カメラで書面を撮影 / 写真を選択
+                      📷 カメラ起動 / 写真を選択
                     </label>
                   </div>
 
@@ -315,7 +362,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
                   {ocrResult && (
                     <div className="ocr-result-container">
-                      <label>AI読み取り結果（タップでフォームに転記できます）</label>
+                      <label>AI読み取り結果（タップで転記）</label>
                       <textarea 
                         rows="5" 
                         value={ocrResult} 
@@ -330,7 +377,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                           }}
                           className="ocr-fill-btn"
                         >
-                          案件名に転記
+                          案件名に設定
                         </button>
                         <button 
                           type="button" 
@@ -356,14 +403,14 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                       id="normal-file-picker" 
                     />
                     <label htmlFor="normal-file-picker" className="file-picker-label">
-                      📁 書面の写真を選択
+                      📁 写真を添付 / カメラ撮影
                     </label>
                   </div>
                   {imageData && (
                     <div className="image-preview-container">
                       <img src={imageData} alt="添付プレビュー" className="attached-img-preview" />
                       <button type="button" onClick={() => setImageData(null)} className="remove-img-btn">
-                        削除
+                        添付を削除
                       </button>
                     </div>
                   )}
@@ -372,9 +419,27 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
             </div>
 
             <button type="submit" className="submit-task-btn">
-              案件を保存する
+              {editingTaskId ? '変更を保存する' : '案件を保存する'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* インライン画像拡大モーダル */}
+      {previewImage && (
+        <div className="preview-modal-overlay" onClick={() => setPreviewImage(null)}>
+          <div className="preview-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="preview-modal-header">
+              <span className="preview-modal-title">{previewImage.title} の添付書面</span>
+              <button className="preview-modal-close" onClick={() => setPreviewImage(null)}>✕</button>
+            </div>
+            <div className="preview-modal-img-container">
+              <img src={previewImage.imageData} alt="拡大書面" className="preview-modal-img" />
+            </div>
+            <div className="preview-modal-footer">
+              ピンチイン・アウト、またはドラッグでスクロールしてご確認いただけます。
+            </div>
+          </div>
         </div>
       )}
 
@@ -386,7 +451,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           flex: 1;
         }
 
-        /* ヘッダー・タブ */
         .task-header-controls {
           display: flex;
           flex-direction: column;
@@ -428,7 +492,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           box-shadow: 0 4px 6px rgba(0,0,0,0.15);
         }
 
-        /* タスクカード */
         .tasks-list-container {
           display: flex;
           flex-direction: column;
@@ -475,7 +538,8 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
         .task-card-actions {
           display: flex;
-          gap: 8px;
+          gap: 10px;
+          align-items: center;
           flex-shrink: 0;
         }
 
@@ -497,7 +561,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           color: var(--text-secondary);
         }
 
-        .delete-btn {
+        .edit-icon-btn, .delete-btn {
           background: none;
           border: none;
           font-size: 14px;
@@ -528,14 +592,36 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           white-space: pre-wrap;
         }
 
-        .file-attached-pill {
+        /* 書面インライン表示 */
+        .task-card-image-attachment {
+          margin-top: 10px;
+          border-top: 1px solid rgba(255,255,255,0.05);
+          padding-top: 8px;
+        }
+
+        .attachment-label {
           font-size: 11px;
-          color: var(--color-gold-light);
-          background-color: rgba(217, 119, 6, 0.08);
-          padding: 2px 8px;
-          border-radius: 4px;
+          color: var(--text-muted);
+          margin-bottom: 6px;
+        }
+
+        .task-thumbnail-wrapper {
           display: inline-block;
-          font-weight: 500;
+          border-radius: 6px;
+          overflow: hidden;
+          border: 1px solid var(--border-color);
+          cursor: pointer;
+          max-width: 120px;
+          max-height: 90px;
+          background-color: #000;
+        }
+
+        .task-card-thumbnail {
+          display: block;
+          width: 100%;
+          height: auto;
+          max-height: 90px;
+          object-fit: cover;
         }
 
         /* 登録フォーム */
@@ -655,7 +741,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           cursor: pointer;
         }
 
-        /* OCR プログレス */
         .ocr-progress-bar-container {
           background-color: rgba(0,0,0,0.2);
           border-radius: 8px;
@@ -730,10 +815,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           font-weight: 600;
         }
 
-        .ocr-fill-btn:active {
-          border-color: var(--color-gold);
-        }
-
         .image-preview-container {
           position: relative;
           margin-top: 10px;
@@ -768,6 +849,82 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           font-size: 15px;
           margin-top: 10px;
           box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+        }
+
+        /* 拡大モーダル */
+        .preview-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 100%;
+          max-width: 480px;
+          height: 100vh;
+          background-color: rgba(0,0,0,0.85);
+          backdrop-filter: blur(5px);
+          z-index: 2000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+        }
+
+        .preview-modal-content {
+          background-color: var(--bg-secondary);
+          border: 1px solid var(--border-color);
+          border-radius: 16px;
+          width: 100%;
+          max-height: 90vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        .preview-modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px;
+          border-bottom: 1px solid var(--border-color);
+        }
+
+        .preview-modal-title {
+          font-size: 14px;
+          font-weight: 700;
+        }
+
+        .preview-modal-close {
+          background: none;
+          border: none;
+          color: var(--text-secondary);
+          font-size: 16px;
+          cursor: pointer;
+        }
+
+        .preview-modal-img-container {
+          flex: 1;
+          overflow: auto; /* はみ出したらスクロール可能にする */
+          background-color: #000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 300px;
+        }
+
+        .preview-modal-img {
+          max-width: 100%;
+          height: auto;
+          display: block;
+        }
+
+        .preview-modal-footer {
+          padding: 12px;
+          font-size: 11px;
+          color: var(--text-muted);
+          text-align: center;
+          border-top: 1px solid var(--border-color);
+          background-color: rgba(0,0,0,0.05);
         }
       `}</style>
     </div>

@@ -89,7 +89,7 @@ const LUNAR_MONTHS = [
   { date: "2031-01-23", lMonth: 12, isLeap: false }
 ];
 
-const ROKUYO_NAMES = ["赤口", "先勝", "友引", "先負", "仏滅", "大安"];
+const ROKUYO_NAMES = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
 
 /**
  * 指定した日付の六曜（および旧暦の月日情報）を算出します
