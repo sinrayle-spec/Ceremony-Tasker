@@ -7,6 +7,9 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [activeTab, setActiveTab] = useState('active'); // 'active' or 'completed'
   
+  // 完了済みの表示フィルター ('recent' = 直近30日, 'all' = すべて)
+  const [archiveFilter, setArchiveFilter] = useState('recent');
+
   // フォーム状態
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -14,8 +17,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
   const [category, setCategory] = useState('打合せ');
   const [color, setColor] = useState('blue');
   const [notes, setNotes] = useState('');
-  
-  // 複数写真添付の状態 (配列: [{ id: 'img_xxx', data: 'base64...' }])
   const [taskImages, setTaskImages] = useState([]);
   
   // OCR（文字読み取り）の状態
@@ -151,9 +152,8 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     return `${pad(mins)}分 ${pad(secs)}秒`;
   };
 
-  // --- 複数写真・アノテーション対応の追加機能 ---
+  // --- 写真＆赤入れ・アノテーション ---
 
-  // 写真データを圧縮するヘルパー
   const compressImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -184,7 +184,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     });
   };
 
-  // 複数写真のアップロード追加
   const handleMultipleImagesChange = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -202,7 +201,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     setTaskImages(prev => [...prev, ...newCompressedList]);
   };
 
-  // OCR用ファイルの処理と画像自動添付
   const handleOcrFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -217,7 +215,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         id: `img_${Date.now()}`,
         data: compressedBase64
       };
-      // 画像リストへ自動添付
       setTaskImages(prev => [...prev, newImgObj]);
 
       const worker = await createWorker('jpn', 1, {
@@ -239,17 +236,14 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     }
   };
 
-  // 添付画像の個別削除
   const removeAttachedImage = (id) => {
     setTaskImages(prev => prev.filter(img => img.id !== id));
   };
 
-  // 画像編集（赤入れ）モーダルの起動
   const startImageEdit = (imgObj) => {
     setEditingImageObj(imgObj);
   };
 
-  // 赤入れした画像の保存
   const saveEditedImage = (editedBase64) => {
     setTaskImages(prev => 
       prev.map(img => img.id === editingImageObj.id ? { ...img, data: editedBase64 } : img)
@@ -257,7 +251,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     setEditingImageObj(null);
   };
 
-  // 互換性フォールバック（旧単一画像データを複数画像配列に自動マイグレーション）
   const getTaskImagesArray = (task) => {
     if (task.images && Array.isArray(task.images)) {
       return task.images;
@@ -268,18 +261,23 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     return [];
   };
 
-  // --- タスクフォーム送信・制御 ---
-
+  // --- カテゴリー色分けの拡張 (8色対応) ---
   const handleCategoryChange = (cat) => {
     setCategory(cat);
     switch (cat) {
       case '施行': setColor('red'); break;
+      case '搬送': setColor('orange'); break;
       case '打合せ': setColor('blue'); break;
       case '事前相談': setColor('green'); break;
       case '法要': setColor('purple'); break;
+      case 'アフター': setColor('pink'); break;
+      case '社内業務': setColor('gray'); break;
+      case '見積': setColor('yellow'); break;
       default: setColor('blue');
     }
   };
+
+  // --- タスク操作 ＆ 送信 ---
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -335,10 +333,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     setCategory(task.category || '打合せ');
     setColor(task.color || 'blue');
     setNotes(task.notes || '');
-    
-    // 画像配列のマイグレーション対応
     setTaskImages(getTaskImagesArray(task));
-    
     setIsAdding(true);
   };
 
@@ -360,15 +355,44 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     return new Date(`${task.date}T${timeStr}:00`).getTime();
   };
 
-  const filteredTasks = tasks.filter(t => 
-    activeTab === 'active' ? t.status !== 'completed' : t.status === 'completed'
-  ).sort((a, b) => getTaskTimestamp(a) - getTaskTimestamp(b));
+  // --- アーカイブ（過去ログ）フィルタリング & ソート ---
+  const getFilteredAndSortedTasks = () => {
+    // 1. 完了・未完了での基本フィルタ
+    let list = tasks.filter(t => 
+      activeTab === 'active' ? t.status !== 'completed' : t.status === 'completed'
+    );
+
+    // 2. 完了済タブかつ「直近30日」フィルターがオンの場合、30日より前のタスクを除外
+    if (activeTab === 'completed' && archiveFilter === 'recent') {
+      const thirtyDaysAgo = now.getTime() - (30 * 24 * 60 * 60 * 1000);
+      list = list.filter(t => {
+        const taskTime = getTaskTimestamp(t);
+        // 期限設定がない場合は直近として表示、ある場合は30日以内
+        return taskTime === Infinity || taskTime >= thirtyDaysAgo;
+      });
+    }
+
+    // 3. 期限が近い順にソート (完了済みの場合は期限が新しいもの順)
+    return list.sort((a, b) => {
+      const timeA = getTaskTimestamp(a);
+      const timeB = getTaskTimestamp(b);
+      
+      if (activeTab === 'completed') {
+        // 完了済みは直近のもの（新しい日付）が上に来るように降順ソート
+        return timeB - timeA;
+      }
+      // 未完了は期限が近い（古い日付）が上に来るように昇順ソート
+      return timeA - timeB;
+    });
+  };
+
+  const displayTasks = getFilteredAndSortedTasks();
 
   return (
     <div className="task-section fade-in" onClick={initAudio}>
       {!isAdding ? (
         <>
-          {/* タスク一覧 */}
+          {/* タスク一覧ヘッダー */}
           <div className="task-header-controls">
             <div className="task-tabs">
               <button 
@@ -385,16 +409,41 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
               </button>
             </div>
             
+            {/* 完了済タブのアクティブ時に表示するアーカイブフィルター */}
+            {activeTab === 'completed' && (
+              <div className="archive-filter-row">
+                <span className="filter-label">履歴の表示範囲:</span>
+                <div className="archive-toggle-group">
+                  <button 
+                    className={`archive-toggle-btn ${archiveFilter === 'recent' ? 'active' : ''}`}
+                    onClick={() => setArchiveFilter('recent')}
+                  >
+                    直近30日分
+                  </button>
+                  <button 
+                    className={`archive-toggle-btn ${archiveFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setArchiveFilter('all')}
+                  >
+                    すべての過去ログ
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <button onClick={() => { setIsAdding(true); setEditingTaskId(null); }} className="add-task-trigger-btn">
               ＋ 新規案件登録
             </button>
           </div>
 
           <div className="tasks-list-container">
-            {filteredTasks.length === 0 ? (
-              <p className="no-tasks-placeholder">登録されている案件はありません。</p>
+            {displayTasks.length === 0 ? (
+              <p className="no-tasks-placeholder">
+                {activeTab === 'completed' && archiveFilter === 'recent'
+                  ? '直近30日間に完了した案件はありません。古い記録は「すべての過去ログ」から確認できます。'
+                  : '登録されている案件はありません。'}
+              </p>
             ) : (
-              filteredTasks.map((task) => {
+              displayTasks.map((task) => {
                 const isRinging = ringingTaskIds.includes(task.id);
                 const hasTime = task.date && task.time;
                 const countdown = getCountdownText(task);
@@ -425,7 +474,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                           onClick={() => toggleComplete(task)} 
                           className={`status-toggle-btn ${task.status === 'completed' ? 'reopen' : 'done'}`}
                         >
-                          {task.status === 'completed' ? '未完了にする' : '完了'}
+                          {task.status === 'completed' ? '未完了に戻す' : '完了'}
                         </button>
                         <button onClick={() => startEdit(task)} className="edit-icon-btn" title="編集">
                           ✏️
@@ -456,7 +505,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
                     {task.notes && <p className="task-card-notes">{task.notes}</p>}
                     
-                    {/* 複数書面のインライン横スクロール表示 */}
+                    {/* 複数書面サムネイル */}
                     {currentImages.length > 0 && (
                       <div className="task-card-image-attachment">
                         <div className="attachment-label">📎 添付書面（{currentImages.length}枚 - タップで拡大）:</div>
@@ -513,10 +562,14 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
             <div className="form-group">
               <label>カテゴリ</label>
               <select value={category} onChange={(e) => handleCategoryChange(e.target.value)}>
-                <option value="施行">施行 (葬儀当日など・赤)</option>
+                <option value="施行">施行 (赤)</option>
+                <option value="搬送">搬送・お迎え (橙)</option>
                 <option value="打合せ">打合せ (青)</option>
                 <option value="事前相談">事前相談 (緑)</option>
                 <option value="法要">法要 (紫)</option>
+                <option value="アフター">アフター (桃)</option>
+                <option value="社内業務">社内業務 (灰)</option>
+                <option value="見積">見積・事務 (黄)</option>
               </select>
             </div>
 
@@ -530,7 +583,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
               />
             </div>
 
-            {/* 写真添付 ＆ OCR ＆ 赤入れ編集 セクション */}
             <div className="ocr-upload-section">
               <div className="section-title-row">
                 <h3>打合せ書面（写真）の添付</h3>
@@ -619,7 +671,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                     </label>
                   </div>
 
-                  {/* 添付画像のサムネイル一覧 ＆ 赤入れボタン ＆ 削除ボタン */}
                   {taskImages.length > 0 && (
                     <div className="form-images-preview-list">
                       {taskImages.map((imgObj, idx) => (
@@ -630,7 +681,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                               type="button" 
                               onClick={() => startImageEdit(imgObj)} 
                               className="img-edit-action-btn"
-                              title="赤入れ（注釈）"
                             >
                               ✏️ 赤入れ
                             </button>
@@ -638,7 +688,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                               type="button" 
                               onClick={() => removeAttachedImage(imgObj.id)} 
                               className="img-remove-action-btn"
-                              title="削除"
                             >
                               ✕
                             </button>
@@ -711,7 +760,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         .task-tab {
           flex: 1;
           padding: 8px;
-          font-size: 13px;
+          font-size: 14px;
           font-weight: 600;
           color: var(--text-secondary);
           text-align: center;
@@ -723,13 +772,53 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           color: var(--text-primary);
         }
 
+        /* 完了アーカイブ用トグル */
+        .archive-filter-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background-color: rgba(255,255,255,0.02);
+          border: 1px solid var(--border-color);
+          padding: 8px 12px;
+          border-radius: 10px;
+          margin-top: 4px;
+        }
+
+        .filter-label {
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--text-secondary);
+        }
+
+        .archive-toggle-group {
+          display: flex;
+          background-color: var(--bg-secondary);
+          border: 1px solid var(--border-color);
+          border-radius: 6px;
+          padding: 2px;
+        }
+
+        .archive-toggle-btn {
+          font-size: 11px;
+          font-weight: 700;
+          padding: 4px 10px;
+          color: var(--text-secondary);
+          border-radius: 4px;
+        }
+
+        .archive-toggle-btn.active {
+          background-color: var(--bg-tertiary);
+          color: var(--text-primary);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
         .add-task-trigger-btn {
           background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
           color: white;
-          padding: 12px;
+          padding: 14px;
           border-radius: 8px;
           font-weight: 700;
-          font-size: 14px;
+          font-size: 16px; /* 14px -> 16px */
           text-align: center;
           box-shadow: 0 4px 6px rgba(0,0,0,0.15);
         }
@@ -745,16 +834,17 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         .no-tasks-placeholder {
           text-align: center;
           color: var(--text-secondary);
-          font-size: 13px;
-          padding: 40px 0;
+          font-size: 14px;
+          padding: 40px 16px;
+          line-height: 1.5;
         }
 
         .task-card {
           background-color: var(--bg-secondary);
           border: 1px solid var(--border-color);
-          border-left: 4px solid var(--color-blue);
+          border-left: 5px solid var(--color-blue); /* 4px -> 5px */
           border-radius: 12px;
-          padding: 16px;
+          padding: 18px; /* 16px -> 18px */
           position: relative;
           box-shadow: 0 2px 5px rgba(0,0,0,0.05);
           transition: all 0.2s ease;
@@ -798,16 +888,18 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          margin-bottom: 6px;
+          margin-bottom: 8px;
           gap: 10px;
           position: relative;
           z-index: 2;
         }
 
+        /* 文字サイズの大幅拡大 */
         .task-card-title {
-          font-size: 16px;
+          font-size: 20px; /* 16px -> 20px */
           font-weight: 700;
           color: var(--text-primary);
+          line-height: 1.3;
         }
 
         .task-card-actions {
@@ -818,9 +910,9 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         }
 
         .status-toggle-btn {
-          font-size: 11px;
+          font-size: 12px; /* 11px -> 12px */
           font-weight: 700;
-          padding: 4px 8px;
+          padding: 6px 10px; /* 余白拡大 */
           border-radius: 6px;
         }
 
@@ -838,9 +930,9 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         .card-alarm-stop-btn {
           background: linear-gradient(135deg, var(--color-red), #991b1b);
           color: white;
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 700;
-          padding: 5px 10px;
+          padding: 6px 12px;
           border-radius: 6px;
           animation: bounce 1s infinite alternate;
           border: 1px solid rgba(255,255,255,0.1);
@@ -855,7 +947,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         .edit-icon-btn, .delete-btn {
           background: none;
           border: none;
-          font-size: 14px;
+          font-size: 16px; /* 14px -> 16px */
           cursor: pointer;
         }
 
@@ -863,25 +955,27 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           display: flex;
           gap: 10px;
           align-items: center;
-          margin-bottom: 10px;
+          margin-bottom: 12px;
           position: relative;
           z-index: 2;
         }
 
         .meta-item {
-          font-size: 12px;
+          font-size: 14px; /* 12px -> 14px */
+          font-weight: 500;
           color: var(--text-secondary);
         }
 
+        /* カウントダウン表示タイマーの拡大 */
         .task-card-countdown-timer {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 8px;
           background-color: rgba(217, 119, 6, 0.06);
           border: 1px solid rgba(217, 119, 6, 0.2);
-          padding: 6px 10px;
+          padding: 8px 12px;
           border-radius: 8px;
-          margin-bottom: 10px;
+          margin-bottom: 12px;
           color: var(--color-gold-light);
           position: relative;
           z-index: 2;
@@ -894,25 +988,26 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         }
 
         .timer-icon-inline {
-          width: 14px;
-          height: 14px;
+          width: 16px;
+          height: 16px;
         }
 
         .countdown-time-label {
-          font-size: 12px;
+          font-size: 15px; /* 12px -> 15px */
           font-weight: 700;
           font-family: monospace;
         }
 
+        /* メモ文字の拡大 */
         .task-card-notes {
-          font-size: 13px;
-          color: var(--text-secondary);
-          line-height: 1.4;
-          margin-bottom: 10px;
-          background-color: rgba(255,255,255,0.01);
-          padding: 8px;
+          font-size: 16px; /* 13px -> 16px */
+          color: var(--text-primary);
+          line-height: 1.5; /* 読みやすさ向上 */
+          margin-bottom: 12px;
+          background-color: rgba(255,255,255,0.015);
+          padding: 10px 12px;
           border-radius: 6px;
-          border-left: 2px solid var(--border-color);
+          border-left: 3px solid var(--border-color);
           white-space: pre-wrap;
           position: relative;
           z-index: 2;
@@ -920,7 +1015,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
         /* 複数書面カルーセル */
         .task-card-image-attachment {
-          margin-top: 10px;
+          margin-top: 12px;
           border-top: 1px solid rgba(255,255,255,0.05);
           padding-top: 8px;
           position: relative;
@@ -928,9 +1023,9 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         }
 
         .attachment-label {
-          font-size: 11px;
-          color: var(--text-muted);
-          margin-bottom: 6px;
+          font-size: 13px; /* 11px -> 13px */
+          color: var(--text-secondary);
+          margin-bottom: 8px;
         }
 
         .task-thumbnails-scroll-container {
@@ -943,8 +1038,8 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
         .task-thumbnail-wrapper-multiple {
           flex-shrink: 0;
-          width: 90px;
-          height: 70px;
+          width: 100px;
+          height: 80px;
           border-radius: 6px;
           overflow: hidden;
           border: 1px solid var(--border-color);
@@ -1076,7 +1171,6 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           cursor: pointer;
         }
 
-        /* フォームプレビュー画像一覧 */
         .form-images-preview-list {
           display: flex;
           gap: 10px;
@@ -1118,14 +1212,14 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
         .preview-image-item-wrapper:hover .preview-actions-overlay,
         .preview-image-item-wrapper:active .preview-actions-overlay {
-          opacity: 1; /* タップ時やホバー時に操作ボタンを表示 */
+          opacity: 1;
         }
 
         .img-edit-action-btn {
           width: 100%;
           background-color: var(--color-gold);
           color: white;
-          font-size: 9px;
+          font-size: 10px;
           font-weight: 700;
           padding: 4px 0;
           border-radius: 4px;
