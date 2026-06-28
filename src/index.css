@@ -1,0 +1,130 @@
+/* Google Fonts から洗練されたフォントをインポート */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* カラーシステム - 葬祭業にふさわしい荘厳で高級感のあるカラーパレット */
+  --bg-primary: #0f172a;       /* 漆黒に近いディープネイビー */
+  --bg-secondary: #1e293b;     /* 上品なミディアムダークブルー */
+  --bg-tertiary: #334155;      /* コンポーネント用のグレーブルー */
+  
+  --color-gold: #d97706;        /* ゴールド（メインアクセント） */
+  --color-gold-light: #fbbf24;  /* ライトゴールド（ハイライト） */
+  --color-gold-dark: #b45309;   /* ダークゴールド */
+  
+  /* タスク・カレンダー色分け用（仏教・神道の五色および実用性を意識した上品なトーン） */
+  --color-red: #e11d48;         /* 施行（葬儀当日など） */
+  --color-blue: #2563eb;        /* 打合せ */
+  --color-green: #16a34a;       /* 事前相談 */
+  --color-purple: #9333ea;      /* 法要・その他 */
+  --color-amber: #d97706;       /* 友引ハイライト / 注意 */
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --border-color: #334155;
+  --border-glow: rgba(217, 119, 6, 0.15);
+  
+  --font-sans: 'Outfit', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent; /* タップ時の青い枠を消す */
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #020617; /* 背景の外側は極限の黒 */
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  max-width: 480px; /* モバイル画面サイズに固定 */
+  min-height: 100vh;
+  background-color: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  padding-bottom: calc(70px + var(--safe-area-bottom)); /* ナビゲーションバー分の余白 */
+}
+
+/* スムーズな表示用アニメーション */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ボタンやインプットの共通スタイル */
+button {
+  font-family: var(--font-sans);
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active {
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+input, select, textarea {
+  font-family: var(--font-sans);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 16px;
+  width: 100%;
+  outline: none;
+  transition: all 0.2s;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 2px var(--border-glow);
+}
+
+/* スクロールバーの非表示（スマホ風にするため） */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+/* ユーティリティクラス */
+.text-gold { color: var(--color-gold); }
+.text-gold-light { color: var(--color-gold-light); }
+.bg-gold { background-color: var(--color-gold); }
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.badge-red { background-color: rgba(225, 29, 72, 0.15); color: var(--color-red); border: 1px solid rgba(225, 29, 72, 0.3); }
+.badge-blue { background-color: rgba(37, 99, 235, 0.15); color: var(--color-blue); border: 1px solid rgba(37, 99, 235, 0.3); }
+.badge-green { background-color: rgba(22, 163, 74, 0.15); color: var(--color-green); border: 1px solid rgba(22, 163, 74, 0.3); }
+.badge-purple { background-color: rgba(147, 51, 234, 0.15); color: var(--color-purple); border: 1px solid rgba(147, 51, 234, 0.3); }
