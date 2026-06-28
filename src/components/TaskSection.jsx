@@ -2,7 +2,97 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createWorker } from 'tesseract.js';
 import ImageEditorModal from './ImageEditorModal';
 
-export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTask }) {
+const convertToWesternDateStr = (val) => {
+  if (!val) return '';
+  let s = val.trim();
+  if (!s) return '';
+
+  // 全角英字と記号の半角化、全角数字の半角化
+  s = s.replace(/[Ａ-Ｚａ-ｚ０-９／．－]/g, (m) => {
+    return String.fromCharCode(m.charCodeAt(0) - 0xFEE0);
+  });
+
+  // 1. 和暦ショートカット (s52/6/10, h12.3.4, r1-5-10, s520610 など)
+  const eraRegex = /^([shrtm])(\d+|元)[./-]?([01]?\d)[./-]?([0-3]?\d)$/i;
+  const match = s.match(eraRegex);
+  if (match) {
+    const eraChar = match[1].toLowerCase();
+    let startYear = 0;
+    if (eraChar === 's') startYear = 1926;
+    else if (eraChar === 'h') startYear = 1989;
+    else if (eraChar === 'r') startYear = 2019;
+    else if (eraChar === 't') startYear = 1912;
+    else if (eraChar === 'm') startYear = 1868;
+
+    const eraYearStr = match[2];
+    const eraYear = eraYearStr === '元' ? 1 : parseInt(eraYearStr, 10);
+    const month = parseInt(match[3], 10);
+    const day = parseInt(match[4], 10);
+
+    if (startYear && !isNaN(eraYear) && !isNaN(month) && !isNaN(day)) {
+      const westernYear = startYear + eraYear - 1;
+      const mm = String(month).padStart(2, '0');
+      const dd = String(day).padStart(2, '0');
+      return `${westernYear}-${mm}-${dd}`;
+    }
+  }
+
+  // 区切りなし和暦ショートカット（例: s520610）
+  const eraNoDividerRegex = /^([shrtm])(\d{1,2})(\d{2})(\d{2})$/i;
+  const matchNoDiv = s.match(eraNoDividerRegex);
+  if (matchNoDiv) {
+    const eraChar = matchNoDiv[1].toLowerCase();
+    let startYear = 0;
+    if (eraChar === 's') startYear = 1926;
+    else if (eraChar === 'h') startYear = 1989;
+    else if (eraChar === 'r') startYear = 2019;
+    else if (eraChar === 't') startYear = 1912;
+    else if (eraChar === 'm') startYear = 1868;
+
+    const eraYear = parseInt(matchNoDiv[2], 10);
+    const month = parseInt(matchNoDiv[3], 10);
+    const day = parseInt(matchNoDiv[4], 10);
+
+    if (startYear && !isNaN(eraYear) && !isNaN(month) && !isNaN(day)) {
+      const westernYear = startYear + eraYear - 1;
+      const mm = String(month).padStart(2, '0');
+      const dd = String(day).padStart(2, '0');
+      return `${westernYear}-${mm}-${dd}`;
+    }
+  }
+
+  // 2. 西暦直接入力 (1977/6/10, 1977.6.10, 19770610) を YYYY-MM-DD に統一
+  const westernRegex = /^(\d{4})[./-]?([01]?\d)[./-]?([0-3]?\d)$/;
+  const wMatch = s.match(westernRegex);
+  if (wMatch) {
+    const year = parseInt(wMatch[1], 10);
+    const month = parseInt(wMatch[2], 10);
+    const day = parseInt(wMatch[3], 10);
+    if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+      const mm = String(month).padStart(2, '0');
+      const dd = String(day).padStart(2, '0');
+      return `${year}-${mm}-${dd}`;
+    }
+  }
+
+  // 8桁数値直接（例: 19770610）
+  const westernNoDivRegex = /^(\d{4})(\d{2})(\d{2})$/;
+  const wMatchNoDiv = s.match(westernNoDivRegex);
+  if (wMatchNoDiv) {
+    const year = parseInt(wMatchNoDiv[1], 10);
+    const month = parseInt(wMatchNoDiv[2], 10);
+    const day = parseInt(wMatchNoDiv[3], 10);
+    if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+      const mm = String(month).padStart(2, '0');
+      const dd = String(day).padStart(2, '0');
+      return `${year}-${mm}-${dd}`;
+    }
+  }
+
+  return s;
+};
+
+export default function TaskSection({ tasks, passcode, categories = [], onAddTask, onUpdateTask, onDeleteTask, targetEditTaskId, clearTargetEditTaskId }) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [activeTab, setActiveTab] = useState('active'); // 'active' or 'completed'
@@ -27,9 +117,21 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
   // 拡大プレビュー用の状態
   const [previewImageObj, setPreviewImageObj] = useState(null);
+  const [eventPreviewImage, setEventPreviewImage] = useState(null);
+  const [editingEventImageObj, setEditingEventImageObj] = useState(null);
 
   // 赤入れ（画像編集）モーダルの状態
   const [editingImageObj, setEditingImageObj] = useState(null);
+
+  useEffect(() => {
+    if (targetEditTaskId) {
+      const taskToEdit = tasks.find(t => t.id === targetEditTaskId);
+      if (taskToEdit) {
+        startEdit(taskToEdit);
+      }
+      clearTargetEditTaskId();
+    }
+  }, [targetEditTaskId]);
 
   // --- カウントダウンタイマー ＆ アラーム制御 ---
   const [now, setNow] = useState(new Date());
@@ -152,6 +254,19 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     return `${pad(mins)}分 ${pad(secs)}秒`;
   };
 
+  const getCountdownColorClass = (task) => {
+    if (!task.date || !task.time) return 'normal';
+    const taskTime = new Date(`${task.date}T${task.time}:00`).getTime();
+    const diffMs = taskTime - now.getTime();
+    if (diffMs <= 0) return 'red';
+
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    if (diffDays <= 1) return 'orange';
+    if (diffDays <= 3) return 'yellow';
+    if (diffDays <= 7) return 'cyan';
+    return 'green';
+  };
+
   // --- 写真＆赤入れ・アノテーション ---
 
   const compressImage = (file) => {
@@ -236,6 +351,44 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     }
   };
 
+  const handleEventImageCapture = async (task, eventId, file) => {
+    if (!file) return;
+    try {
+      const base64 = await compressImage(file);
+      const newImg = {
+        id: `evt_img_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        data: base64
+      };
+      const updatedEvents = (task.events || []).map(evt => {
+        if (evt.id === eventId) {
+          return {
+            ...evt,
+            images: [...(evt.images || []), newImg]
+          };
+        }
+        return evt;
+      });
+      onUpdateTask(task.id, { events: updatedEvents });
+    } catch (err) {
+      console.error(err);
+      alert('写真の追加に失敗しました。');
+    }
+  };
+
+  const handleDeleteEventImage = (task, eventId, imageId) => {
+    if (!window.confirm('この写真を削除してもよろしいですか？')) return;
+    const updatedEvents = (task.events || []).map(evt => {
+      if (evt.id === eventId) {
+        return {
+          ...evt,
+          images: (evt.images || []).filter(img => img.id !== imageId)
+        };
+      }
+      return evt;
+    });
+    onUpdateTask(task.id, { events: updatedEvents });
+  };
+
   const removeAttachedImage = (id) => {
     setTaskImages(prev => prev.filter(img => img.id !== id));
   };
@@ -251,6 +404,22 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
     setEditingImageObj(null);
   };
 
+  const saveEditedEventImage = (editedBase64) => {
+    if (!editingEventImageObj) return;
+    const { task, eventId, imageId } = editingEventImageObj;
+    const updatedEvents = (task.events || []).map(evt => {
+      if (evt.id === eventId) {
+        return {
+          ...evt,
+          images: (evt.images || []).map(img => img.id === imageId ? { ...img, data: editedBase64 } : img)
+        };
+      }
+      return evt;
+    });
+    onUpdateTask(task.id, { events: updatedEvents });
+    setEditingEventImageObj(null);
+  };
+
   const getTaskImagesArray = (task) => {
     if (task.images && Array.isArray(task.images)) {
       return task.images;
@@ -262,18 +431,13 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
   };
 
   // --- カテゴリー色分けの拡張 (8色対応) ---
-  const handleCategoryChange = (cat) => {
-    setCategory(cat);
-    switch (cat) {
-      case '施行': setColor('red'); break;
-      case '搬送': setColor('orange'); break;
-      case '打合せ': setColor('blue'); break;
-      case '事前相談': setColor('green'); break;
-      case '法要': setColor('purple'); break;
-      case 'アフター': setColor('pink'); break;
-      case '社内業務': setColor('gray'); break;
-      case '見積': setColor('yellow'); break;
-      default: setColor('blue');
+  const handleCategoryChange = (catName) => {
+    setCategory(catName);
+    const catObj = (categories || []).find(c => c.name === catName);
+    if (catObj && catObj.color) {
+      setColor(catObj.color);
+    } else {
+      setColor('blue');
     }
   };
 
@@ -479,7 +643,19 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
                         <button onClick={() => startEdit(task)} className="edit-icon-btn" title="編集">
                           ✏️
                         </button>
-                        <button onClick={() => onDeleteTask(task.id)} className="delete-btn" title="削除">
+                        <button 
+                          onClick={() => {
+                            const entered = window.prompt("【警告】この案件データを完全に削除します。よろしければログイン用のパスコードを入力してください：");
+                            if (entered === null) return;
+                            if (entered !== String(passcode)) {
+                              alert("パスコードが一致しないため、削除を中止しました。");
+                              return;
+                            }
+                            onDeleteTask(task.id);
+                          }} 
+                          className="delete-btn" 
+                          title="削除"
+                        >
                           🗑️
                         </button>
                       </div>
@@ -492,7 +668,7 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
                     {/* カウントダウン表示タイマー */}
                     {task.status !== 'completed' && hasTime && (
-                      <div className={`task-card-countdown-timer ${isExpired ? 'expired' : ''}`}>
+                      <div className={`task-card-countdown-timer timer-color-${getCountdownColorClass(task)}`}>
                         <svg className="timer-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <circle cx="12" cy="12" r="10"></circle>
                           <polyline points="12 6 12 12 16 14"></polyline>
@@ -537,6 +713,47 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           </div>
 
           <form onSubmit={handleSubmit} className="task-form">
+            <div className="form-group" style={{ marginBottom: '14px' }}>
+              <label>👤 顧客名簿から情報をコピー</label>
+              <select 
+                onChange={(e) => {
+                  const customerId = e.target.value;
+                  if (!customerId) return;
+                  const selected = tasks.find(t => t.id === customerId);
+                  if (selected) {
+                    const name = selected.deceasedLastName 
+                      ? `${selected.deceasedLastName}家` 
+                      : (selected.title || '新規お客様');
+                    setTitle(`${name} 葬儀`);
+                    setNotes(`【顧客情報コピー】\n故人名: ${selected.deceasedLastName || ''} ${selected.deceasedFirstName || ''}\n喪主名: ${selected.mournerLastName || ''} ${selected.mournerFirstName || ''}\n連絡先: ${selected.contact || ''}\n寺院宗派: ${selected.templeName || ''} (${selected.sect || ''})`);
+                  }
+                }}
+                className="load-customer-select"
+                defaultValue=""
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">-- [顧客名簿から選択して自動入力] --</option>
+                {tasks
+                  .filter(t => t.deceasedLastName || t.title)
+                  .map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.deceasedLastName ? `${t.deceasedLastName}家 (故人: ${t.deceasedLastName} ${t.deceasedFirstName || ''})` : t.title}
+                    </option>
+                  ))
+                }
+              </select>
+            </div>
+
             <div className="form-group">
               <label>案件名（故人名/家名など）*</label>
               <input 
@@ -551,7 +768,11 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
             <div className="form-row">
               <div className="form-group">
                 <label>日付 (期限)</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                <input 
+                  type="date" 
+                  value={date} 
+                  onChange={(e) => setDate(e.target.value)} 
+                />
               </div>
               <div className="form-group">
                 <label>時間 (アラーム時刻)</label>
@@ -562,14 +783,11 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
             <div className="form-group">
               <label>カテゴリ</label>
               <select value={category} onChange={(e) => handleCategoryChange(e.target.value)}>
-                <option value="施行">施行 (赤)</option>
-                <option value="搬送">搬送・お迎え (橙)</option>
-                <option value="打合せ">打合せ (青)</option>
-                <option value="事前相談">事前相談 (緑)</option>
-                <option value="法要">法要 (紫)</option>
-                <option value="アフター">アフター (桃)</option>
-                <option value="社内業務">社内業務 (灰)</option>
-                <option value="見積">見積・事務 (黄)</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.name}>
+                    {cat.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -734,12 +952,23 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
         />
       )}
 
+      {/* 予定画像編集モーダル */}
+      {editingEventImageObj && (
+        <ImageEditorModal
+          imageData={editingEventImageObj.data}
+          onSave={saveEditedEventImage}
+          onClose={() => setEditingEventImageObj(null)}
+        />
+      )}
+
       <style>{`
         .task-section {
           padding: 16px;
+          padding-bottom: 90px;
           display: flex;
           flex-direction: column;
           flex: 1;
+          overflow-y: auto;
         }
 
         .task-header-controls {
@@ -953,17 +1182,18 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
 
         .task-card-meta {
           display: flex;
-          gap: 10px;
+          gap: 12px;
           align-items: center;
+          flex-wrap: wrap; /* 折り返し対応 */
           margin-bottom: 12px;
           position: relative;
           z-index: 2;
         }
 
         .meta-item {
-          font-size: 14px; /* 12px -> 14px */
-          font-weight: 500;
-          color: var(--text-secondary);
+          font-size: 17px; /* 14px -> 17px */
+          font-weight: 700; /* より太く強調 */
+          color: var(--text-primary);
         }
 
         /* カウントダウン表示タイマーの拡大 */
@@ -981,10 +1211,34 @@ export default function TaskSection({ tasks, onAddTask, onUpdateTask, onDeleteTa
           z-index: 2;
         }
 
-        .task-card-countdown-timer.expired {
+        .task-card-countdown-timer.timer-color-red {
           background-color: rgba(225, 29, 72, 0.06);
-          border-color: rgba(225, 29, 72, 0.2);
+          border-color: rgba(225, 29, 72, 0.25);
           color: var(--color-red);
+        }
+
+        .task-card-countdown-timer.timer-color-orange {
+          background-color: rgba(249, 115, 22, 0.06);
+          border-color: rgba(249, 115, 22, 0.25);
+          color: var(--color-orange);
+        }
+
+        .task-card-countdown-timer.timer-color-yellow {
+          background-color: rgba(234, 179, 8, 0.06);
+          border-color: rgba(234, 179, 8, 0.25);
+          color: var(--color-yellow);
+        }
+
+        .task-card-countdown-timer.timer-color-cyan {
+          background-color: rgba(6, 182, 212, 0.06);
+          border-color: rgba(6, 182, 212, 0.25);
+          color: #06b6d4; /* シアン */
+        }
+
+        .task-card-countdown-timer.timer-color-green {
+          background-color: rgba(34, 197, 94, 0.06);
+          border-color: rgba(34, 197, 94, 0.25);
+          color: var(--color-green);
         }
 
         .timer-icon-inline {

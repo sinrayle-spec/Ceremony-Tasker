@@ -63,9 +63,46 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
     });
   }
 
+  const getCategoryColor = (cat) => {
+    if (!cat) return 'blue';
+    const s = cat.toLowerCase();
+    if (s.includes('施行') || s.includes('通夜') || s.includes('葬儀') || s.includes('告別式')) return 'red';
+    if (s.includes('法要') || s.includes('法事') || s.includes('忌') || s.includes('盆') || s.includes('納骨')) return 'purple';
+    if (s.includes('搬送')) return 'orange';
+    if (s.includes('相談')) return 'green';
+    if (s.includes('見積')) return 'yellow';
+    if (s.includes('打合せ')) return 'blue';
+    if (s.includes('アフター')) return 'pink';
+    if (s.includes('業務')) return 'gray';
+    return 'gray';
+  };
+
+  const getLocalDateString = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   const getTasksForDate = (dateObj) => {
-    const dateStr = dateObj.toISOString().split('T')[0];
-    return tasks.filter(t => t.date === dateStr);
+    const dateStr = getLocalDateString(dateObj);
+    const matching = [];
+    tasks.forEach(t => {
+      // 1. タスク（案件）自体の期限日付が一致する場合
+      if (t.date === dateStr) {
+        matching.push({
+          id: `${t.id}_main`,
+          originalTaskId: t.id,
+          title: t.title,
+          category: t.category || '打合せ',
+          time: t.time || '',
+          color: getCategoryColor(t.category || '打合せ'),
+          notes: t.notes || '',
+          images: t.images || []
+        });
+      }
+    });
+    return matching;
   };
 
   const isSameDay = (d1, d2) => {
@@ -143,7 +180,9 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
                     className="task-bar"
                     style={{ backgroundColor: `var(--color-${task.color || 'blue'})` }}
                     title={task.title}
-                  />
+                  >
+                    {task.title}
+                  </div>
                 ))}
                 {dateTasks.length > 3 && (
                   <div className="task-bar-more">
@@ -175,7 +214,10 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
                   key={task.id} 
                   className="selected-task-card"
                   style={{ borderLeftColor: `var(--color-${task.color || 'blue'})` }}
-                  onClick={() => onSelectTask(task)}
+                  onClick={() => {
+                    const original = tasks.find(t => t.id === task.originalTaskId);
+                    if (original) onSelectTask(original);
+                  }}
                 >
                   <div className="selected-task-card-header">
                     <span className="selected-task-title">{task.title}</span>
@@ -246,7 +288,7 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
         .days-grid {
           display: grid;
           grid-template-columns: repeat(7, 1fr);
-          grid-auto-rows: 68px; /* 少し高さを広げてバーを収まりやすく */
+          grid-auto-rows: 78px; /* 文字表示用に高さを拡張 */
           gap: 4px;
           margin-bottom: 20px;
         }
@@ -318,9 +360,18 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
 
         .task-bar {
           width: 100%;
-          height: 5px;
-          border-radius: 2px;
+          height: 13px;
+          border-radius: 3px;
           box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+          font-size: 8px;
+          line-height: 13px;
+          color: #ffffff;
+          padding: 0 3px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-weight: 700;
+          text-align: left;
         }
 
         .task-bar-more {

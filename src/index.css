@@ -45,16 +45,18 @@ body {
   font-family: var(--font-sans);
   background-color: #020617;
   color: var(--text-primary);
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
   justify-content: center;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 #root {
   width: 100%;
   max-width: 480px;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   background-color: var(--bg-primary);
   display: flex;
   flex-direction: column;
@@ -62,7 +64,7 @@ body {
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
   border-left: 1px solid var(--border-color);
   border-right: 1px solid var(--border-color);
-  padding-bottom: calc(70px + var(--safe-area-bottom));
+  overflow: hidden;
 }
 
 @keyframes fadeIn {
@@ -118,9 +120,9 @@ input:focus, select:focus, textarea:focus {
 /* バッジスタイル */
 .badge {
   display: inline-block;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 12px; /* 11px -> 12px */
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 15px; /* 12px -> 15px */
   font-weight: 700;
   text-transform: uppercase;
 }

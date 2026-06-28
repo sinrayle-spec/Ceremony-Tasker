@@ -4,15 +4,66 @@ import Navigation from './components/Navigation';
 import CalendarSection from './components/CalendarSection';
 import TaskSection from './components/TaskSection';
 import GallerySection from './components/GallerySection';
+import CustomerDirectory from './components/CustomerDirectory';
+import SettingsSection from './components/SettingsSection';
 import { useEncryptedStorage } from './hooks/useLocalStorage';
 
 export default function App() {
   const [passcode, setPasscode] = useState(null); // PIN入力されると解除
-  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks', 'calendar', 'gallery'
+  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks', 'calendar', 'gallery', 'customers', 'settings'
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [targetEditTaskId, setTargetEditTaskId] = useState(null);
 
   // 暗号化対応のカスタムストレージでタスク一覧を管理
   const [tasks, setTasks] = useEncryptedStorage('ct_tasks', [], passcode);
+
+  // カスタムカテゴリー設定の管理
+  const [categories, setCategories] = useEncryptedStorage('ct_categories', [
+    { id: 'cat_1', name: '施行', color: 'red' },
+    { id: 'cat_2', name: '搬送', color: 'orange' },
+    { id: 'cat_3', name: '打合せ', color: 'blue' },
+    { id: 'cat_4', name: '事前相談', color: 'green' },
+    { id: 'cat_5', name: '法要', color: 'purple' },
+    { id: 'cat_6', name: 'アフター', color: 'pink' },
+    { id: 'cat_7', name: '社内業務', color: 'gray' },
+    { id: 'cat_8', name: '見積', color: 'yellow' }
+  ], passcode);
+
+  // カスタム宗派設定の管理
+  const [sects, setSects] = useEncryptedStorage('ct_sects', [
+    '浄土真宗', '真言宗', '曹洞宗', '臨済宗', '日蓮宗', '天台宗', '浄土宗', '神道', 'キリスト教'
+  ], passcode);
+
+  // 旧データ形式から新データ形式(複数予定/イベント対応)へのマイグレーション
+  useEffect(() => {
+    if (tasks && tasks.length > 0) {
+      let needsMigration = false;
+      const migrated = tasks.map(task => {
+        if (!task.events) {
+          needsMigration = true;
+          return {
+            ...task,
+            events: [
+              {
+                id: `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                category: task.category || '打合せ',
+                date: task.date || new Date().toISOString().split('T')[0],
+                time: task.time || '',
+                alarmEnabled: true,
+                status: task.status === 'completed' ? 'completed' : 'active',
+                notes: ''
+              }
+            ]
+          };
+        }
+        return task;
+      });
+
+      if (needsMigration) {
+        setTasks(migrated);
+      }
+    }
+  }, [tasks, setTasks]);
 
   // 通知許可のリクエスト
   useEffect(() => {
@@ -107,25 +158,51 @@ export default function App() {
       {/* メインコンテンツエリア */}
       <main className="app-content">
         {activeTab === 'tasks' && (
-          <TaskSection 
-            tasks={tasks} 
-            onAddTask={handleAddTask}
-            onUpdateTask={handleUpdateTask}
-            onDeleteTask={handleDeleteTask}
-          />
-        )}
-        {activeTab === 'calendar' && (
-          <CalendarSection 
-            tasks={tasks} 
-            selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
-            onSelectTask={handleSelectTaskFromCalendar}
-          />
-        )}
-        {activeTab === 'gallery' && (
-          <GallerySection tasks={tasks} />
-        )}
-      </main>
+           <TaskSection 
+             tasks={tasks} 
+             passcode={passcode}
+             categories={categories}
+             onAddTask={handleAddTask}
+             onUpdateTask={handleUpdateTask}
+             onDeleteTask={handleDeleteTask}
+             targetEditTaskId={targetEditTaskId}
+             clearTargetEditTaskId={() => setTargetEditTaskId(null)}
+           />
+         )}
+         {activeTab === 'calendar' && (
+           <CalendarSection 
+             tasks={tasks} 
+             selectedDate={selectedDate}
+             onSelectDate={setSelectedDate}
+             onSelectTask={handleSelectTaskFromCalendar}
+           />
+         )}
+         {activeTab === 'gallery' && (
+           <GallerySection tasks={tasks} />
+         )}
+          {activeTab === 'customers' && (
+            <CustomerDirectory 
+              tasks={tasks}
+              passcode={passcode}
+              sects={sects}
+              onUpdateCustomer={handleUpdateTask}
+              onDeleteCustomer={handleDeleteTask}
+              onAddCustomer={handleAddTask}
+              onEditCustomer={(id) => {
+                setTargetEditTaskId(id);
+                setActiveTab('tasks');
+              }}
+            />
+          )}
+          {activeTab === 'settings' && (
+            <SettingsSection 
+              categories={categories}
+              onUpdateCategories={setCategories}
+              sects={sects}
+              onUpdateSects={setSects}
+            />
+          )}
+       </main>
 
       {/* 下部ナビゲーション */}
       <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -134,8 +211,10 @@ export default function App() {
         .app-container {
           display: flex;
           flex-direction: column;
-          min-height: 100vh;
+          height: 100vh;
+          height: 100dvh;
           width: 100%;
+          overflow: hidden;
         }
 
         .app-header {
@@ -197,6 +276,8 @@ export default function App() {
           display: flex;
           flex-direction: column;
           width: 100%;
+          min-height: 0;
+          overflow: hidden;
         }
       `}</style>
     </div>
