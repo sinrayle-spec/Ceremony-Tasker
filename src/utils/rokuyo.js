@@ -1,7 +1,7 @@
 // 2025年〜2030年の旧暦各月の朔日（ついたち）の新暦日付リスト（YYYY-MM-DD）
 // 各項目: { date: "YYYY-MM-DD", lMonth: 月(1-12), isLeap: 閏月かどうか(boolean) }
 const LUNAR_MONTHS = [
-  // 2025年
+  // 2025年 (閏6月あり)
   { date: "2025-01-29", lMonth: 1, isLeap: false },
   { date: "2025-02-28", lMonth: 2, isLeap: false },
   { date: "2025-03-29", lMonth: 3, isLeap: false },
@@ -16,7 +16,7 @@ const LUNAR_MONTHS = [
   { date: "2025-12-19", lMonth: 11, isLeap: false },
   { date: "2026-01-17", lMonth: 12, isLeap: false },
 
-  // 2026年
+  // 2026年 (閏月なし)
   { date: "2026-02-17", lMonth: 1, isLeap: false },
   { date: "2026-03-19", lMonth: 2, isLeap: false },
   { date: "2026-04-17", lMonth: 3, isLeap: false },
@@ -30,62 +30,63 @@ const LUNAR_MONTHS = [
   { date: "2026-12-09", lMonth: 11, isLeap: false },
   { date: "2027-01-08", lMonth: 12, isLeap: false },
 
-  // 2027年
+  // 2027年 (閏月なし)
   { date: "2027-02-07", lMonth: 1, isLeap: false },
-  { date: "2027-03-09", lMonth: 2, isLeap: false },
+  { date: "2027-03-08", lMonth: 2, isLeap: false },
   { date: "2027-04-07", lMonth: 3, isLeap: false },
-  { date: "2027-05-07", lMonth: 4, isLeap: false },
+  { date: "2027-05-06", lMonth: 4, isLeap: false },
   { date: "2027-06-05", lMonth: 5, isLeap: false },
   { date: "2027-07-04", lMonth: 6, isLeap: false },
-  { date: "2027-08-03", lMonth: 7, isLeap: false },
+  { date: "2027-08-02", lMonth: 7, isLeap: false },
   { date: "2027-09-01", lMonth: 8, isLeap: false },
-  { date: "2027-10-01", lMonth: 9, isLeap: false },
-  { date: "2027-10-30", lMonth: 10, isLeap: false },
-  { date: "2027-11-29", lMonth: 11, isLeap: false },
+  { date: "2027-09-30", lMonth: 9, isLeap: false },
+  { date: "2027-10-29", lMonth: 10, isLeap: false },
+  { date: "2027-11-28", lMonth: 11, isLeap: false },
   { date: "2027-12-28", lMonth: 12, isLeap: false },
 
-  // 2028年
+  // 2028年 (閏5月あり)
   { date: "2028-01-27", lMonth: 1, isLeap: false },
   { date: "2028-02-25", lMonth: 2, isLeap: false },
   { date: "2028-03-26", lMonth: 3, isLeap: false },
-  { date: "2028-04-24", lMonth: 4, isLeap: false },
+  { date: "2028-04-25", lMonth: 4, isLeap: false },
   { date: "2028-05-24", lMonth: 5, isLeap: false },
-  { date: "2028-06-22", lMonth: 6, isLeap: false },
-  { date: "2028-07-22", lMonth: 7, isLeap: false },
-  { date: "2028-08-20", lMonth: 8, isLeap: false },
-  { date: "2028-09-18", lMonth: 9, isLeap: false },
-  { date: "2028-10-18", lMonth: 10, isLeap: false },
-  { date: "2028-11-16", lMonth: 11, isLeap: false },
-  { date: "2028-12-16", lMonth: 12, isLeap: false },
+  { date: "2028-06-23", lMonth: 5, isLeap: true },  // 閏5月
+  { date: "2028-07-22", lMonth: 6, isLeap: false },
+  { date: "2028-08-20", lMonth: 7, isLeap: false },
+  { date: "2028-09-19", lMonth: 8, isLeap: false },
+  { date: "2028-10-18", lMonth: 9, isLeap: false },
+  { date: "2028-11-16", lMonth: 10, isLeap: false },
+  { date: "2028-12-16", lMonth: 11, isLeap: false },
+  { date: "2029-01-15", lMonth: 12, isLeap: false },
 
-  // 2029年
-  { date: "2029-01-14", lMonth: 1, isLeap: false },
-  { date: "2029-02-13", lMonth: 2, isLeap: false },
-  { date: "2029-03-14", lMonth: 3, isLeap: false },
-  { date: "2029-04-12", lMonth: 4, isLeap: false },
-  { date: "2029-05-12", lMonth: 5, isLeap: false },
-  { date: "2029-06-10", lMonth: 6, isLeap: false },
-  { date: "2029-07-10", lMonth: 7, isLeap: false },
-  { date: "2029-08-08", lMonth: 8, isLeap: false },
-  { date: "2029-09-07", lMonth: 9, isLeap: false },
-  { date: "2029-10-06", lMonth: 10, isLeap: false },
-  { date: "2029-11-05", lMonth: 11, isLeap: false },
-  { date: "2029-12-05", lMonth: 12, isLeap: false },
+  // 2029年 (閏月なし)
+  { date: "2029-02-12", lMonth: 1, isLeap: false },
+  { date: "2029-03-14", lMonth: 2, isLeap: false },
+  { date: "2029-04-12", lMonth: 3, isLeap: false },
+  { date: "2029-05-12", lMonth: 4, isLeap: false },
+  { date: "2029-06-10", lMonth: 5, isLeap: false },
+  { date: "2029-07-10", lMonth: 6, isLeap: false },
+  { date: "2029-08-08", lMonth: 7, isLeap: false },
+  { date: "2029-09-07", lMonth: 8, isLeap: false },
+  { date: "2029-10-06", lMonth: 9, isLeap: false },
+  { date: "2029-11-05", lMonth: 10, isLeap: false },
+  { date: "2029-12-04", lMonth: 11, isLeap: false },
+  { date: "2030-01-03", lMonth: 12, isLeap: false },
 
-  // 2030年
-  { date: "2030-01-03", lMonth: 1, isLeap: false },
-  { date: "2030-02-02", lMonth: 2, isLeap: false },
-  { date: "2030-03-03", lMonth: 3, isLeap: false },
-  { date: "2030-04-01", lMonth: 4, isLeap: false },
-  { date: "2030-05-01", lMonth: 5, isLeap: false },
-  { date: "2030-05-30", lMonth: 6, isLeap: false },
-  { date: "2030-06-29", lMonth: 7, isLeap: false },
-  { date: "2030-07-28", lMonth: 8, isLeap: false },
-  { date: "2030-08-27", lMonth: 9, isLeap: false },
-  { date: "2030-09-25", lMonth: 10, isLeap: false },
-  { date: "2030-10-25", lMonth: 11, isLeap: false },
-  { date: "2030-11-23", lMonth: 12, isLeap: false },
-  { date: "2030-12-23", lMonth: 12, isLeap: true } // 閏12月
+  // 2030年 (閏7月あり)
+  { date: "2030-02-01", lMonth: 1, isLeap: false },
+  { date: "2030-03-03", lMonth: 2, isLeap: false },
+  { date: "2030-04-01", lMonth: 3, isLeap: false },
+  { date: "2030-05-01", lMonth: 4, isLeap: false },
+  { date: "2030-05-30", lMonth: 5, isLeap: false },
+  { date: "2030-06-29", lMonth: 6, isLeap: false },
+  { date: "2030-07-28", lMonth: 7, isLeap: false },
+  { date: "2030-08-27", lMonth: 7, isLeap: true },  // 閏7月
+  { date: "2030-09-25", lMonth: 8, isLeap: false },
+  { date: "2030-10-25", lMonth: 9, isLeap: false },
+  { date: "2030-11-23", lMonth: 10, isLeap: false },
+  { date: "2030-12-23", lMonth: 11, isLeap: false },
+  { date: "2031-01-21", lMonth: 12, isLeap: false }
 ];
 
 const ROKUYO_NAMES = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
