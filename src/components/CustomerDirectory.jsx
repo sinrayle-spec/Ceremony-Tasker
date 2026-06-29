@@ -1605,15 +1605,12 @@ export default function CustomerDirectory({
       <style>{`
         .customer-directory {
           padding: 16px;
-          padding-bottom: 90px;
-          display: flex;
-          flex-direction: column;
+          padding-bottom: 120px;
+          display: block;
           flex: 1;
-          overflow-y: scroll;
+          overflow-y: auto;
           min-height: 0;
-          height: 100%;
           -webkit-overflow-scrolling: touch;
-          touch-action: pan-y;
         }
 
         .directory-header-controls {
