@@ -187,7 +187,8 @@ export default function LockScreen({ onUnlock }) {
           align-items: center;
           justify-content: space-between;
           height: 100vh;
-          padding: 40px 24px;
+          height: 100dvh;
+          padding: 24px;
           background-color: var(--bg-primary);
           z-index: 1000;
           position: absolute;
@@ -195,6 +196,7 @@ export default function LockScreen({ onUnlock }) {
           left: 0;
           right: 0;
           bottom: 0;
+          overflow-y: auto; /* スクロール可能にする */
         }
 
         .lock-header {

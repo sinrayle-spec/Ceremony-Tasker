@@ -42,25 +42,45 @@ self.addEventListener('fetch', (event) => {
     }
   }
 
+  // HTML ファイル（特に index.html）へのリクエストは Network-First で処理（常に最新のJSハッシュを優先ロード）
+  const isHtmlRequest = event.request.headers.get('accept')?.includes('text/html') || 
+                        event.request.url.endsWith('/') || 
+                        event.request.url.endsWith('index.html');
+
+  if (isHtmlRequest) {
+    event.respondWith(
+      fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      }).catch(() => {
+        // オフラインの時のみキャッシュを返す
+        return caches.match(event.request);
+      })
+    );
+    return;
+  }
+
+  // それ以外の静的アセット（JS, CSS, 画像など）は Cache-First / Stale-While-Revalidate
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // キャッシュがあればそれを返しつつ、バックグラウンドでネットワークから取得して更新
+        // キャッシュがあればそれを返しつつ、バックグラウンドで最新版に更新
         fetch(event.request).then((networkResponse) => {
           if (networkResponse.status === 200) {
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, networkResponse);
             });
           }
-        }).catch(() => {
-          // オフライン時は何もしない
-        });
+        }).catch(() => {});
         return cachedResponse;
       }
 
-      // キャッシュがなければネットワークから取得
       return fetch(event.request).then((response) => {
-        // レポンスが正常かつGETリクエストの場合のみキャッシュに追加
         if (response && response.status === 200 && event.request.method === 'GET') {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
