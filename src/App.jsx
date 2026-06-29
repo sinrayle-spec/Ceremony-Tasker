@@ -77,8 +77,11 @@ export default function App() {
   // カテゴリーと宗派の新しいデフォルト値への一括アップデートマイグレーション (一度のみ)
   useEffect(() => {
     if (passcode) {
-      const hasMigratedDefaultSettings = localStorage.getItem('ct_migrated_defaults_v2');
-      if (!hasMigratedDefaultSettings) {
+      const hasMigratedDefaultSettings = localStorage.getItem('ct_migrated_defaults_v3');
+      const isOldCategories = Array.isArray(categories) && (categories.length > 4 || categories.some(c => c.name === '搬送' || c.name === '事前相談'));
+      const isOldSects = Array.isArray(sects) && (sects.includes('浄土真宗') || !sects.includes('創価学会'));
+
+      if (!hasMigratedDefaultSettings || isOldCategories || isOldSects) {
         const newDefaultCategories = [
           { id: 'cat_1', name: '施行', color: 'red' },
           { id: 'cat_2', name: '打合せ', color: 'blue' },
@@ -91,10 +94,10 @@ export default function App() {
 
         setCategories(newDefaultCategories);
         setSects(newDefaultSects);
-        localStorage.setItem('ct_migrated_defaults_v2', 'true');
+        localStorage.setItem('ct_migrated_defaults_v3', 'true');
       }
     }
-  }, [passcode, setCategories, setSects]);
+  }, [passcode, categories, sects, setCategories, setSects]);
 
   // 通知許可のリクエスト
   useEffect(() => {
