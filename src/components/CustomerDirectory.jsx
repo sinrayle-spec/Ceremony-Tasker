@@ -186,8 +186,8 @@ export default function CustomerDirectory({
   onEditCustomer 
 }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedCustomerIds, setExpandedCustomerIds] = useState([]);
   const [sortBy, setSortBy] = useState('newest'); // 'newest', 'oldest', 'name', 'funeral', 'death'
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null); // 詳細表示用の一客ID
 
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
 
@@ -207,7 +207,7 @@ export default function CustomerDirectory({
   const [funeralDate, setFuneralDate] = useState('');
   const [customerNotes, setCustomerNotes] = useState('');
 
-  // Inline Add New Event States (mapped by customerId)
+  // Inline Add New Event States
   const [newEventCategory, setNewEventCategory] = useState('打合せ');
   const [customEventCategory, setCustomEventCategory] = useState('');
   const [newEventDate, setNewEventDate] = useState(new Date().toISOString().split('T')[0]);
@@ -223,7 +223,7 @@ export default function CustomerDirectory({
   const [editEventNotes, setEditEventNotes] = useState('');
   const [eventPreviewImage, setEventPreviewImage] = useState(null);
 
-  // Check if a customer task is active (has active events)
+  // Check if a customer task is active
   const isCustomerActive = (customer) => {
     if (customer.status === 'completed') return false;
     const hasActiveEvents = (customer.events || []).some(e => e.status !== 'completed');
@@ -566,6 +566,826 @@ export default function CustomerDirectory({
 
   const displayCustomers = getFilteredCustomers();
 
+  // --- 詳細ビューのレンダリング (選択された顧客のみ) ---
+  if (selectedCustomerId) {
+    const customer = tasks.find(t => t.id === selectedCustomerId);
+    if (!customer) {
+      setSelectedCustomerId(null);
+      return null;
+    }
+
+    const active = isCustomerActive(customer);
+    const isEditing = editingCustomerId === customer.id;
+
+    return (
+      <div className="customer-directory fade-in">
+        {/* 詳細ヘッダー */}
+        <div className="directory-detail-header">
+          <button 
+            type="button"
+            onClick={() => {
+              setSelectedCustomerId(null);
+              setEditingCustomerId(null);
+            }} 
+            className="back-list-btn"
+          >
+            ← 顧客一覧に戻る
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const entered = window.prompt("【警告】この顧客のすべての記録と写真を完全に削除します。よろしければログイン用のパスコードを入力してください：");
+              if (entered === null) return;
+              if (entered !== String(passcode)) {
+                alert("パスコードが一致しないため、削除を中止しました。");
+                return;
+              }
+              onDeleteCustomer(customer.id);
+              setSelectedCustomerId(null);
+            }}
+            className="detail-delete-btn"
+          >
+            🗑️ 顧客データを削除
+          </button>
+        </div>
+
+        {/* 顧客詳細カード */}
+        <div className={`directory-customer-card detail-mode ${active ? 'active-status' : 'completed-status'}`}>
+          <div className="customer-card-header" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '12px', marginBottom: '12px' }}>
+            <div className="customer-title-block">
+              <span className="customer-card-title" style={{ fontSize: '20px' }}>{customer.title}</span>
+              <span className={`status-badge ${active ? 'badge-active' : 'badge-completed'}`}>
+                {active ? '進行中' : '施行完了'}
+              </span>
+            </div>
+            
+            <div className="customer-card-actions">
+              <button 
+                type="button"
+                onClick={() => onEditCustomer(customer.id)} 
+                className="edit-profile-btn"
+                title="詳細図面・OCR・書面ファイルを編集"
+              >
+                📁 ファイル・OCR管理
+              </button>
+            </div>
+          </div>
+
+          <div className="customer-expanded-panel" style={{ display: 'block', borderTop: 'none', paddingTop: 0, marginTop: 0 }}>
+            {/* 1. 顧客基本情報 */}
+            <div className="customer-section-block">
+              <div className="block-header">
+                <h4>👤 顧客基本情報</h4>
+                {!isEditing ? (
+                  <button 
+                    type="button" 
+                    onClick={() => startInlineEdit(customer)} 
+                    className="inline-action-btn edit"
+                  >
+                    ✏️ プロフィールを編集
+                  </button>
+                ) : (
+                  <div className="edit-actions-row">
+                    <button 
+                      type="button" 
+                      onClick={() => saveInlineEdit(customer.id)} 
+                      className="inline-action-btn save"
+                    >
+                      💾 保存
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={cancelInlineEdit} 
+                      className="inline-action-btn cancel"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {!isEditing ? (
+                <table className="customer-details-table">
+                  <tbody>
+                    <tr>
+                      <th>故人名</th>
+                      <td>{customer.deceasedLastName || customer.deceasedFirstName ? `${customer.deceasedLastName || ''} ${customer.deceasedFirstName || ''}` : (customer.deceasedName || '未登録')}</td>
+                      <th>喪主名</th>
+                      <td>{customer.mournerLastName || customer.mournerFirstName ? `${customer.mournerLastName || ''} ${customer.mournerFirstName || ''}` : (customer.mournerName || '未登録')}</td>
+                    </tr>
+                    <tr>
+                      <th>生年月日</th>
+                      <td>{customer.birthDate || '未登録'}</td>
+                      <th>連絡先</th>
+                      <td>{customer.contact || '未登録'}</td>
+                    </tr>
+                    <tr>
+                      <th>逝去日</th>
+                      <td>{customer.deathDate || '未登録'}</td>
+                      <th>住所</th>
+                      <td>{customer.address || '未登録'}</td>
+                    </tr>
+                    <tr>
+                      <th>寺院名</th>
+                      <td>{customer.templeName || '未登録'}</td>
+                      <th>宗派</th>
+                      <td>{customer.sect || '未登録'}</td>
+                    </tr>
+                    <tr>
+                      <th>通夜日</th>
+                      <td>{customer.wakeDate || '未登録'}</td>
+                      <th>葬儀日</th>
+                      <td>{customer.funeralDate || '未登録'}</td>
+                    </tr>
+                    {(() => {
+                      const ageInfo = calculateAge(customer.birthDate, customer.deathDate);
+                      if (!ageInfo) return null;
+                      return (
+                        <tr style={{ backgroundColor: 'rgba(212, 175, 55, 0.08)' }}>
+                          <th>自動計算年齢</th>
+                          <td colSpan="3">
+                            <strong style={{ color: 'var(--color-gold-light)' }}>行年（満年齢）：{ageInfo.fullAge}歳</strong>
+                            <span style={{ margin: '0 12px', color: 'var(--text-muted)' }}>/</span>
+                            <strong style={{ color: 'var(--color-gold-light)' }}>享年（数え年）：{ageInfo.countAge}歳</strong>
+                          </td>
+                        </tr>
+                      );
+                    })()}
+                    {customer.notes && (
+                      <tr>
+                        <th>全体備考</th>
+                        <td colSpan="3" style={{ whiteSpace: 'pre-wrap' }}>{customer.notes}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="inline-edit-form-grid">
+                  <div className="edit-form-group span-2">
+                    <label>故人名</label>
+                    <div className="name-inputs-flex">
+                      <input type="text" value={deceasedLastName} onChange={(e) => setDeceasedLastName(e.target.value)} placeholder="姓 例：山田" />
+                      <input type="text" value={deceasedFirstName} onChange={(e) => setDeceasedFirstName(e.target.value)} placeholder="名 例：太郎" />
+                    </div>
+                  </div>
+                  <div className="edit-form-group span-2">
+                    <label>喪主名</label>
+                    <div className="name-inputs-flex">
+                      <input type="text" value={mournerLastName} onChange={(e) => setMournerLastName(e.target.value)} placeholder="姓 例：山田" />
+                      <input type="text" value={mournerFirstName} onChange={(e) => setMournerFirstName(e.target.value)} placeholder="名 例：太一" />
+                    </div>
+                  </div>
+                  <div className="edit-form-group">
+                    <label>生年月日</label>
+                    <input 
+                      type="text" 
+                      value={birthDate} 
+                      onChange={(e) => setBirthDate(e.target.value)} 
+                      onBlur={(e) => setBirthDate(convertToJapaneseEraOrNormalize(e.target.value))}
+                      placeholder="例：s52/6/10 または 1977-06-10" 
+                    />
+                  </div>
+                  <div className="edit-form-group">
+                    <label>連絡先</label>
+                    <input type="text" value={contact} onChange={(e) => setContact(e.target.value)} placeholder="連絡先" />
+                  </div>
+                  <div className="edit-form-group">
+                    <label>逝去日</label>
+                    <input 
+                      type="date" 
+                      value={deathDate} 
+                      onChange={(e) => setDeathDate(e.target.value)} 
+                    />
+                  </div>
+                  <div className="edit-form-group">
+                    <label>住所</label>
+                    <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="住所" />
+                  </div>
+                  <div className="edit-form-group">
+                    <label>寺院名</label>
+                    <input type="text" value={templeName} onChange={(e) => setTempleName(e.target.value)} placeholder="お寺" />
+                  </div>
+                  <div className="edit-form-group">
+                    <label>宗派</label>
+                     <input 
+                       type="text" 
+                       list="sect-options"
+                       value={sect} 
+                       onChange={(e) => setSect(e.target.value)} 
+                       placeholder="宗派を入力または選択" 
+                     />
+                  </div>
+                  <div className="edit-form-group">
+                    <label>通夜日</label>
+                    <input 
+                      type="date" 
+                      value={wakeDate} 
+                      onChange={(e) => setWakeDate(e.target.value)} 
+                    />
+                  </div>
+                  <div className="edit-form-group">
+                    <label>葬儀告別式日</label>
+                    <input 
+                      type="date" 
+                      value={funeralDate} 
+                      onChange={(e) => setFuneralDate(e.target.value)} 
+                    />
+                  </div>
+                  {(() => {
+                    const ageInfo = calculateAge(birthDate, deathDate);
+                    if (!ageInfo) return null;
+                    return (
+                      <div className="edit-form-group span-2" style={{
+                        backgroundColor: 'rgba(212, 175, 55, 0.08)',
+                        border: '1px solid rgba(212, 175, 55, 0.2)',
+                        borderRadius: '8px',
+                        padding: '10px 14px',
+                        marginTop: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '16px'
+                      }}>
+                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--color-gold-light)' }}>年齢 (自動計算):</span>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold' }}>行年（満年齢）：{ageInfo.fullAge}歳</span>
+                        <span style={{ color: 'var(--text-muted)' }}>/</span>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold' }}>享年（数え年）：{ageInfo.countAge}歳</span>
+                      </div>
+                    );
+                  })()}
+                  <div className="edit-form-group span-2">
+                    <label>全体備考</label>
+                    <textarea value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} placeholder="備考欄" rows="2" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 2. 予定・タスク管理 */}
+            <div className="customer-section-block" style={{ marginTop: '14px' }}>
+              <h4>⏳ 進行中の予定</h4>
+              <div className="directory-events-list">
+                {[...(customer.events || [])]
+                  .filter(e => e.status !== 'completed')
+                  .sort((a, b) => {
+                    const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}:00`).getTime() : Infinity;
+                    const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}:00`).getTime() : Infinity;
+                    return dateA - dateB;
+                  })
+                  .map((evt) => {
+                    const isEvtEditing = editingEventId === evt.id;
+                    if (isEvtEditing) {
+                      return (
+                        <div key={evt.id} className="directory-event-edit-row" style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '8px',
+                          padding: '10px 14px',
+                          marginBottom: '6px'
+                        }}>
+                          <div className="form-row-flex">
+                            <select 
+                              value={editEventCategory} 
+                              onChange={(e) => setEditEventCategory(e.target.value)} 
+                              className="inline-event-input"
+                              style={{ width: '130px', fontSize: '11px' }}
+                            >
+                              <option value="打合せ">打合せ</option>
+                              <option value="施行">施行</option>
+                              <option value="搬送">搬送</option>
+                              <option value="事前相談">事前相談</option>
+                              <option value="法要 (四十九日/納骨等)">法要 (四十九日/納骨等)</option>
+                              <option value="一周忌法要">一周忌法要</option>
+                              <option value="三回忌法要">三回忌法要</option>
+                              <option value="見積">見積</option>
+                              <option value="CUSTOM">その他 (自由入力)</option>
+                            </select>
+                            {editEventCategory === 'CUSTOM' && (
+                              <input 
+                                type="text" 
+                                placeholder="カテゴリ名" 
+                                value={customEditEventCategory} 
+                                onChange={(e) => setCustomEditEventCategory(e.target.value)} 
+                                className="inline-event-input"
+                                style={{ width: '120px', fontSize: '11px' }}
+                                required
+                              />
+                            )}
+                            <input 
+                              type="date" 
+                              value={editEventDate} 
+                              onChange={(e) => setEditEventDate(e.target.value)} 
+                              className="inline-event-input"
+                              style={{ flex: 1, fontSize: '11px' }} 
+                            />
+                            <input 
+                              type="time" 
+                              value={editEventTime} 
+                              onChange={(e) => setEditEventTime(e.target.value)} 
+                              className="inline-event-input"
+                              style={{ width: '80px', fontSize: '11px' }} 
+                            />
+                          </div>
+                          <div className="form-row-flex">
+                            <input 
+                              type="text" 
+                              placeholder="詳細メモ" 
+                              value={editEventNotes} 
+                              onChange={(e) => setEditEventNotes(e.target.value)} 
+                              className="inline-event-input"
+                              style={{ flex: 1, fontSize: '11px' }} 
+                            />
+                            <button 
+                              type="button" 
+                              onClick={() => saveEventEdit(customer, evt.id)}
+                              className="inline-action-btn save"
+                              style={{ fontSize: '11px', padding: '4px 8px' }}
+                            >
+                              保存
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={cancelEventEdit}
+                              className="inline-action-btn cancel"
+                              style={{ fontSize: '11px', padding: '4px 8px' }}
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div 
+                        key={evt.id} 
+                        className={`directory-event-row border-${getCategoryColor(evt.category)}`}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <label className="event-row-label">
+                            <input 
+                              type="checkbox" 
+                              checked={false} 
+                              onChange={() => toggleEventCompleteInline(customer, evt.id)} 
+                              className="event-checkbox"
+                            />
+                            <span className={`badge badge-${getCategoryColor(evt.category)}`}>{evt.category}</span>
+                            <span className="event-datetime">📅 {evt.date} {evt.time ? `🕒 ${evt.time}` : ''}</span>
+                            {evt.notes && <span className="event-notes-label">({evt.notes})</span>}
+                          </label>
+                          
+                          <div className="event-row-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <label htmlFor={`dir_cam_${customer.id}_${evt.id}`} className="event-camera-btn" style={{
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              padding: '3px 8px',
+                              backgroundColor: 'rgba(255,255,255,0.05)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              fontWeight: 'bold',
+                              color: 'var(--text-secondary)'
+                            }}>
+                              📷 写真を追加
+                            </label>
+                            <input 
+                              type="file" 
+                              id={`dir_cam_${customer.id}_${evt.id}`} 
+                              accept="image/*" 
+                              style={{ display: 'none' }} 
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  handleEventImageCapture(customer, evt.id, e.target.files[0]);
+                                }
+                              }}
+                            />
+
+                            <button 
+                              type="button" 
+                              onClick={() => startEventEdit(evt)} 
+                              className="inline-event-action-btn edit-btn"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--text-secondary)' }}
+                              title="予定を編集"
+                            >
+                              ✏️
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => deleteEventInline(customer, evt.id)} 
+                              className="inline-event-action-btn delete-btn"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--color-red)' }}
+                              title="予定を削除"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Event specific thumbnails gallery */}
+                        {evt.images && evt.images.length > 0 && (
+                          <div className="event-thumbnails-slider" style={{
+                            display: 'flex',
+                            gap: '8px',
+                            overflowX: 'auto',
+                            padding: '4px 0',
+                            marginTop: '2px',
+                            borderTop: '1px dashed rgba(255,255,255,0.05)'
+                          }}>
+                            {evt.images.map((img) => (
+                              <div key={img.id} className="event-thumb-wrapper" style={{
+                                position: 'relative',
+                                width: '50px',
+                                height: '50px',
+                                flexShrink: 0,
+                                borderRadius: '6px',
+                                overflow: 'hidden',
+                                border: '1px solid var(--border-color)'
+                              }}>
+                                <img 
+                                  src={img.data} 
+                                  alt="event doc" 
+                                  onClick={() => setEventPreviewImage(img.data)}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                                />
+                                <button 
+                                  type="button"
+                                  onClick={() => handleDeleteEventImage(customer, evt.id, img.id)}
+                                  style={{
+                                    position: 'absolute',
+                                    top: '2px',
+                                    right: '2px',
+                                    width: '14px',
+                                    height: '14px',
+                                    borderRadius: '50%',
+                                    backgroundColor: 'rgba(0,0,0,0.6)',
+                                    color: 'white',
+                                    border: 'none',
+                                    fontSize: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                {[...(customer.events || [])].filter(e => e.status !== 'completed').length === 0 && (
+                  <p className="no-events-text">現在、進行中の予定はありません。</p>
+                )}
+              </div>
+            </div>
+
+            {/* 3. 完了済みの履歴 */}
+            {[...(customer.events || [])].some(e => e.status === 'completed') && (
+              <div className="customer-section-block" style={{ marginTop: '14px' }}>
+                <h4 style={{ fontSize: '11px', color: 'var(--text-muted)' }}>✅ 完了済みの履歴</h4>
+                <div className="directory-events-list completed-list">
+                  {[...(customer.events || [])]
+                    .filter(e => e.status === 'completed')
+                    .sort((a, b) => {
+                      const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}:00`).getTime() : Infinity;
+                      const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}:00`).getTime() : Infinity;
+                      return dateB - dateA;
+                    })
+                    .map((evt) => {
+                      const isEvtEditing = editingEventId === evt.id;
+                      if (isEvtEditing) {
+                        return (
+                          <div key={evt.id} className="directory-event-edit-row" style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            padding: '10px 14px',
+                            marginBottom: '6px'
+                          }}>
+                            <div className="form-row-flex">
+                              <select 
+                                value={editEventCategory} 
+                                onChange={(e) => setEditEventCategory(e.target.value)} 
+                                className="inline-event-input"
+                                style={{ width: '130px', fontSize: '11px' }}
+                              >
+                                <option value="打合せ">打合せ</option>
+                                <option value="施行">施行</option>
+                                <option value="搬送">搬送</option>
+                                <option value="事前相談">事前相談</option>
+                                <option value="法要 (四十九日/納骨等)">法要 (四十九日/納骨等)</option>
+                                <option value="一周忌法要">一周忌法要</option>
+                                <option value="三回忌法要">三回忌法要</option>
+                                <option value="見積">見積</option>
+                                <option value="CUSTOM">その他 (自由入力)</option>
+                              </select>
+                              {editEventCategory === 'CUSTOM' && (
+                                <input 
+                                  type="text" 
+                                  placeholder="カテゴリ名" 
+                                  value={customEditEventCategory} 
+                                  onChange={(e) => setCustomEditEventCategory(e.target.value)} 
+                                  className="inline-event-input"
+                                  style={{ width: '120px', fontSize: '11px' }}
+                                  required
+                                />
+                              )}
+                              <input 
+                                type="date" 
+                                value={editEventDate} 
+                                onChange={(e) => setEditEventDate(e.target.value)} 
+                                className="inline-event-input"
+                                style={{ flex: 1, fontSize: '11px' }} 
+                              />
+                              <input 
+                                type="time" 
+                                value={editEventTime} 
+                                onChange={(e) => setEditEventTime(e.target.value)} 
+                                className="inline-event-input"
+                                style={{ width: '80px', fontSize: '11px' }} 
+                              />
+                            </div>
+                            <div className="form-row-flex">
+                              <input 
+                                type="text" 
+                                placeholder="詳細メモ" 
+                                value={editEventNotes} 
+                                onChange={(e) => setEditEventNotes(e.target.value)} 
+                                className="inline-event-input"
+                                style={{ flex: 1, fontSize: '11px' }} 
+                              />
+                              <button 
+                                type="button" 
+                                onClick={() => saveEventEdit(customer, evt.id)}
+                                className="inline-action-btn save"
+                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                              >
+                                保存
+                              </button>
+                              <button 
+                                type="button" 
+                                onClick={cancelEventEdit}
+                                className="inline-action-btn cancel"
+                                style={{ fontSize: '11px', padding: '4px 8px' }}
+                              >
+                                取消
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div 
+                          key={evt.id} 
+                          className="directory-event-row completed-item" 
+                          style={{ opacity: 0.75, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="event-row-label">
+                              <input 
+                                type="checkbox" 
+                                checked={true} 
+                                onChange={() => toggleEventCompleteInline(customer, evt.id)} 
+                                className="event-checkbox"
+                              />
+                              <span className="badge badge-gray">{evt.category}</span>
+                              <span className="event-datetime" style={{ textDecoration: 'line-through' }}>📅 {evt.date} {evt.time ? `🕒 ${evt.time}` : ''}</span>
+                              {evt.notes && <span className="event-notes-label" style={{ textDecoration: 'line-through' }}>({evt.notes})</span>}
+                            </label>
+                            
+                            <div className="event-row-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <label htmlFor={`dir_cam_${customer.id}_${evt.id}`} className="event-camera-btn" style={{
+                                cursor: 'pointer',
+                                fontSize: '11px',
+                                padding: '3px 8px',
+                                backgroundColor: 'rgba(255,255,255,0.05)',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                fontWeight: 'bold',
+                                color: 'var(--text-secondary)'
+                              }}>
+                                📷 写真を追加
+                              </label>
+                              <input 
+                                type="file" 
+                                id={`dir_cam_${customer.id}_${evt.id}`} 
+                                accept="image/*" 
+                                style={{ display: 'none' }} 
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    handleEventImageCapture(customer, evt.id, e.target.files[0]);
+                                  }
+                                }}
+                              />
+
+                              <span 
+                                style={{ fontSize: '11px', cursor: 'not-allowed', opacity: 0.7, padding: '2px 4px' }}
+                                title="完了済みの予定は編集ロックされています。未完了に戻すと編集できます。"
+                              >
+                                🔒
+                              </span>
+                              <button 
+                                type="button" 
+                                onClick={() => deleteEventInline(customer, evt.id)} 
+                                className="inline-event-action-btn delete-btn"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--color-red)' }}
+                                title="予定を削除"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Event specific thumbnails gallery */}
+                          {evt.images && evt.images.length > 0 && (
+                            <div className="event-thumbnails-slider" style={{
+                              display: 'flex',
+                              gap: '8px',
+                              overflowX: 'auto',
+                              padding: '4px 0',
+                              marginTop: '2px',
+                              borderTop: '1px dashed rgba(255,255,255,0.05)'
+                            }}>
+                              {evt.images.map((img) => (
+                                <div key={img.id} className="event-thumb-wrapper" style={{
+                                  position: 'relative',
+                                  width: '50px',
+                                  height: '50px',
+                                  flexShrink: 0,
+                                  borderRadius: '6px',
+                                  overflow: 'hidden',
+                                  border: '1px solid var(--border-color)'
+                                }}>
+                                  <img 
+                                    src={img.data} 
+                                    alt="event doc" 
+                                    onClick={() => setEventPreviewImage(img.data)}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                                  />
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleDeleteEventImage(customer, evt.id, img.id)}
+                                    style={{
+                                      position: 'absolute',
+                                      top: '2px',
+                                      right: '2px',
+                                      width: '14px',
+                                      height: '14px',
+                                      borderRadius: '50%',
+                                      backgroundColor: 'rgba(0,0,0,0.6)',
+                                      color: 'white',
+                                      border: 'none',
+                                      fontSize: '8px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* 4. 新しい予定の追加 */}
+            <div className="customer-section-block add-event-inline-block" style={{ marginTop: '14px' }}>
+              <h4>📅 新しい予定を登録</h4>
+              <div className="inline-add-event-form">
+                <div className="form-row-flex">
+                  <select 
+                    value={newEventCategory} 
+                    onChange={(e) => setNewEventCategory(e.target.value)} 
+                    className="inline-event-input select-category"
+                    style={{ width: '130px' }}
+                  >
+                    <option value="打合せ">打合せ</option>
+                    <option value="施行">施行</option>
+                    <option value="搬送">搬送</option>
+                    <option value="事前相談">事前相談</option>
+                    <option value="法要 (四十九日/納骨等)">法要 (四十九日/納骨等)</option>
+                    <option value="一周忌法要">一周忌法要</option>
+                    <option value="三回忌法要">三回忌法要</option>
+                    <option value="見積">見積</option>
+                    <option value="CUSTOM">その他 (自由入力)</option>
+                  </select>
+                  {newEventCategory === 'CUSTOM' && (
+                    <input 
+                      type="text" 
+                      placeholder="自由入力のカテゴリ名" 
+                      value={customEventCategory} 
+                      onChange={(e) => setCustomEventCategory(e.target.value)} 
+                      className="inline-event-input input-custom-category" 
+                      style={{ width: '130px' }}
+                      required
+                    />
+                  )}
+                  <input type="date" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} className="inline-event-input input-date" />
+                  <input type="time" value={newEventTime} onChange={(e) => setNewEventTime(e.target.value)} className="inline-event-input input-time" />
+                </div>
+                <div className="form-row-flex" style={{ marginTop: '8px' }}>
+                  <input 
+                    type="text" 
+                    placeholder="予定に関する詳細メモ（例：式場手配など）" 
+                    value={newEventNotes} 
+                    onChange={(e) => setNewEventNotes(e.target.value)} 
+                    className="inline-event-input input-notes" 
+                    style={{ flex: 1 }}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => handleAddEventInline(customer)} 
+                    className="inline-add-event-submit-btn"
+                  >
+                    ＋ 予定を追加
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 予定ごとの写真拡大モーダル */}
+        {eventPreviewImage && (
+          <div className="preview-modal-overlay" onClick={() => setEventPreviewImage(null)} style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '16px'
+          }}>
+            <div className="preview-modal-content" onClick={(e) => e.stopPropagation()} style={{
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              maxWidth: '500px',
+              width: '100%',
+              overflow: 'hidden',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              <div className="preview-modal-header" style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '12px 16px',
+                borderBottom: '1px solid var(--border-color)'
+              }}>
+                <span className="preview-modal-title" style={{ fontSize: '14px', fontWeight: 'bold' }}>予定添付写真 拡大</span>
+                <button 
+                  className="preview-modal-close" 
+                  onClick={() => setEventPreviewImage(null)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '20px', cursor: 'pointer' }}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="preview-modal-img-container" style={{ textAlign: 'center', padding: '16px', backgroundColor: 'black' }}>
+                <img src={eventPreviewImage} alt="予定写真" style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '8px' }} />
+              </div>
+              <div className="preview-modal-footer" style={{
+                padding: '12px 16px',
+                borderTop: '1px solid var(--border-color)',
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+                textAlign: 'center'
+              }}>
+                撮影した書類写真等をご確認いただけます。
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // --- 顧客一覧ビューのレンダリング (デフォルト) ---
   return (
     <div className="customer-directory fade-in">
       <div className="directory-header-controls">
@@ -747,19 +1567,19 @@ export default function CustomerDirectory({
         </form>
       )}
 
+      {/* 顧客一覧リスト表示 */}
       <div className="customers-list-container">
         {displayCustomers.length === 0 ? (
           <p className="no-tasks-placeholder">登録されているお客様情報はありません。</p>
         ) : (
           displayCustomers.map((customer) => {
             const active = isCustomerActive(customer);
-            const isExpanded = expandedCustomerIds.includes(customer.id);
-            const isEditing = editingCustomerId === customer.id;
             
             return (
               <div 
                 key={customer.id} 
-                className={`directory-customer-card ${active ? 'active-status' : 'completed-status'}`}
+                className={`directory-customer-card clickable-card ${active ? 'active-status' : 'completed-status'}`}
+                onClick={() => setSelectedCustomerId(customer.id)}
               >
                 <div className="customer-card-header">
                   <div className="customer-title-block">
@@ -768,16 +1588,7 @@ export default function CustomerDirectory({
                       {active ? '進行中' : '施行完了'}
                     </span>
                   </div>
-                  
-                  <div className="customer-card-actions">
-                    <button 
-                      onClick={() => onEditCustomer(customer.id)} 
-                      className="edit-profile-btn"
-                      title="詳細図面・OCR・書面ファイルを編集"
-                    >
-                      📁 ファイル・OCR管理
-                    </button>
-                  </div>
+                  <span className="card-arrow-indicator">詳細 ❯</span>
                 </div>
 
                 <div className="customer-quick-info">
@@ -785,777 +1596,10 @@ export default function CustomerDirectory({
                   <span className="quick-info-item"><strong>喪主:</strong> {customer.mournerLastName || customer.mournerFirstName ? `${customer.mournerLastName || ''} ${customer.mournerFirstName || ''}` : (customer.mournerName || '未登録')}</span>
                   <span className="quick-info-item"><strong>宗派:</strong> {customer.sect || '未登録'}</span>
                 </div>
-
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setExpandedCustomerIds(prev => 
-                      isExpanded 
-                        ? prev.filter(id => id !== customer.id) 
-                        : [...prev, customer.id]
-                    );
-                  }}
-                  className="customer-details-toggle-btn"
-                >
-                  {isExpanded ? '👤 管理パネルを閉じる ▲' : '👤 基本情報・予定を管理 ▼'}
-                </button>
-
-                {isExpanded && (
-                  <div className="customer-expanded-panel">
-                    
-                    {/* 1. 顧客基本情報 */}
-                    <div className="customer-section-block">
-                      <div className="block-header">
-                        <h4>👤 顧客基本情報</h4>
-                        {!isEditing ? (
-                          <button 
-                            type="button" 
-                            onClick={() => startInlineEdit(customer)} 
-                            className="inline-action-btn edit"
-                          >
-                            ✏️ プロフィールを編集
-                          </button>
-                        ) : (
-                          <div className="edit-actions-row">
-                            <button 
-                              type="button" 
-                              onClick={() => saveInlineEdit(customer.id)} 
-                              className="inline-action-btn save"
-                            >
-                              💾 保存
-                            </button>
-                            <button 
-                              type="button" 
-                              onClick={cancelInlineEdit} 
-                              className="inline-action-btn cancel"
-                            >
-                              キャンセル
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {!isEditing ? (
-                        <table className="customer-details-table">
-                          <tbody>
-                            <tr>
-                              <th>故人名</th>
-                              <td>{customer.deceasedLastName || customer.deceasedFirstName ? `${customer.deceasedLastName || ''} ${customer.deceasedFirstName || ''}` : (customer.deceasedName || '未登録')}</td>
-                              <th>喪主名</th>
-                              <td>{customer.mournerLastName || customer.mournerFirstName ? `${customer.mournerLastName || ''} ${customer.mournerFirstName || ''}` : (customer.mournerName || '未登録')}</td>
-                            </tr>
-                            <tr>
-                              <th>生年月日</th>
-                              <td>{customer.birthDate || '未登録'}</td>
-                              <th>連絡先</th>
-                              <td>{customer.contact || '未登録'}</td>
-                            </tr>
-                            <tr>
-                              <th>逝去日</th>
-                              <td>{customer.deathDate || '未登録'}</td>
-                              <th>住所</th>
-                              <td>{customer.address || '未登録'}</td>
-                            </tr>
-                            <tr>
-                              <th>寺院名</th>
-                              <td>{customer.templeName || '未登録'}</td>
-                              <th>宗派</th>
-                              <td>{customer.sect || '未登録'}</td>
-                            </tr>
-                            <tr>
-                              <th>通夜日</th>
-                              <td>{customer.wakeDate || '未登録'}</td>
-                              <th>葬儀日</th>
-                              <td>{customer.funeralDate || '未登録'}</td>
-                            </tr>
-                            {(() => {
-                              const ageInfo = calculateAge(customer.birthDate, customer.deathDate);
-                              if (!ageInfo) return null;
-                              return (
-                                <tr style={{ backgroundColor: 'rgba(212, 175, 55, 0.08)' }}>
-                                  <th>自動計算年齢</th>
-                                  <td colSpan="3">
-                                    <strong style={{ color: 'var(--color-gold-light)' }}>行年（満年齢）：{ageInfo.fullAge}歳</strong>
-                                    <span style={{ margin: '0 12px', color: 'var(--text-muted)' }}>/</span>
-                                    <strong style={{ color: 'var(--color-gold-light)' }}>享年（数え年）：{ageInfo.countAge}歳</strong>
-                                  </td>
-                                </tr>
-                              );
-                            })()}
-                            {customer.notes && (
-                              <tr>
-                                <th>全体備考</th>
-                                <td colSpan="3" style={{ whiteSpace: 'pre-wrap' }}>{customer.notes}</td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      ) : (
-                        <div className="inline-edit-form-grid">
-                          <div className="edit-form-group span-2">
-                            <label>故人名</label>
-                            <div className="name-inputs-flex">
-                              <input type="text" value={deceasedLastName} onChange={(e) => setDeceasedLastName(e.target.value)} placeholder="姓 例：山田" />
-                              <input type="text" value={deceasedFirstName} onChange={(e) => setDeceasedFirstName(e.target.value)} placeholder="名 例：太郎" />
-                            </div>
-                          </div>
-                          <div className="edit-form-group span-2">
-                            <label>喪主名</label>
-                            <div className="name-inputs-flex">
-                              <input type="text" value={mournerLastName} onChange={(e) => setMournerLastName(e.target.value)} placeholder="姓 例：山田" />
-                              <input type="text" value={mournerFirstName} onChange={(e) => setMournerFirstName(e.target.value)} placeholder="名 例：太一" />
-                            </div>
-                          </div>
-                          <div className="edit-form-group">
-                            <label>生年月日</label>
-                            <input 
-                              type="text" 
-                              value={birthDate} 
-                              onChange={(e) => setBirthDate(e.target.value)} 
-                              onBlur={(e) => setBirthDate(convertToJapaneseEraOrNormalize(e.target.value))}
-                              placeholder="例：s52/6/10 または 1977-06-10" 
-                            />
-                          </div>
-                          <div className="edit-form-group">
-                            <label>連絡先</label>
-                            <input type="text" value={contact} onChange={(e) => setContact(e.target.value)} placeholder="連絡先" />
-                          </div>
-                          <div className="edit-form-group">
-                            <label>逝去日</label>
-                            <input 
-                              type="date" 
-                              value={deathDate} 
-                              onChange={(e) => setDeathDate(e.target.value)} 
-                            />
-                          </div>
-                          <div className="edit-form-group">
-                            <label>住所</label>
-                            <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="住所" />
-                          </div>
-                          <div className="edit-form-group">
-                            <label>寺院名</label>
-                            <input type="text" value={templeName} onChange={(e) => setTempleName(e.target.value)} placeholder="お寺" />
-                          </div>
-                          <div className="edit-form-group">
-                            <label>宗派</label>
-                             <input 
-                               type="text" 
-                               list="sect-options"
-                               value={sect} 
-                               onChange={(e) => setSect(e.target.value)} 
-                               placeholder="宗派を入力または選択" 
-                             />
-                          </div>
-                          <div className="edit-form-group">
-                            <label>通夜日</label>
-                            <input 
-                              type="date" 
-                              value={wakeDate} 
-                              onChange={(e) => setWakeDate(e.target.value)} 
-                            />
-                          </div>
-                          <div className="edit-form-group">
-                            <label>葬儀告別式日</label>
-                            <input 
-                              type="date" 
-                              value={funeralDate} 
-                              onChange={(e) => setFuneralDate(e.target.value)} 
-                            />
-                          </div>
-                          {(() => {
-                            const ageInfo = calculateAge(birthDate, deathDate);
-                            if (!ageInfo) return null;
-                            return (
-                              <div className="edit-form-group span-2" style={{
-                                backgroundColor: 'rgba(212, 175, 55, 0.08)',
-                                border: '1px solid rgba(212, 175, 55, 0.2)',
-                                borderRadius: '8px',
-                                padding: '10px 14px',
-                                marginTop: '4px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '16px'
-                              }}>
-                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--color-gold-light)' }}>年齢 (自動計算):</span>
-                                <span style={{ fontSize: '13px', fontWeight: 'bold' }}>行年（満年齢）：{ageInfo.fullAge}歳</span>
-                                <span style={{ color: 'var(--text-muted)' }}>/</span>
-                                <span style={{ fontSize: '13px', fontWeight: 'bold' }}>享年（数え年）：{ageInfo.countAge}歳</span>
-                              </div>
-                            );
-                          })()}
-                          <div className="edit-form-group span-2">
-                            <label>全体備考</label>
-                            <textarea value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} placeholder="備考欄" rows="2" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 2. 予定・タスク管理 */}
-                    <div className="customer-section-block">
-                      <h4>⏳ 進行中の予定</h4>
-                      <div className="directory-events-list">
-                        {[...(customer.events || [])]
-                          .filter(e => e.status !== 'completed')
-                          .sort((a, b) => {
-                            const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}:00`).getTime() : Infinity;
-                            const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}:00`).getTime() : Infinity;
-                            return dateA - dateB;
-                          })
-                          .map((evt) => {
-                            const isEvtEditing = editingEventId === evt.id;
-                            if (isEvtEditing) {
-                              return (
-                                <div key={evt.id} className="directory-event-edit-row" style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: '8px',
-                                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                                  border: '1px solid var(--border-color)',
-                                  borderRadius: '8px',
-                                  padding: '10px 14px',
-                                  marginBottom: '6px'
-                                }}>
-                                  <div className="form-row-flex">
-                                    <select 
-                                      value={editEventCategory} 
-                                      onChange={(e) => setEditEventCategory(e.target.value)} 
-                                      className="inline-event-input"
-                                      style={{ width: '130px', fontSize: '11px' }}
-                                    >
-                                      <option value="打合せ">打合せ</option>
-                                      <option value="施行">施行</option>
-                                      <option value="搬送">搬送</option>
-                                      <option value="事前相談">事前相談</option>
-                                      <option value="法要 (四十九日/納骨等)">法要 (四十九日/納骨等)</option>
-                                      <option value="一周忌法要">一周忌法要</option>
-                                      <option value="三回忌法要">三回忌法要</option>
-                                      <option value="見積">見積</option>
-                                      <option value="CUSTOM">その他 (自由入力)</option>
-                                    </select>
-                                    {editEventCategory === 'CUSTOM' && (
-                                      <input 
-                                        type="text" 
-                                        placeholder="カテゴリ名" 
-                                        value={customEditEventCategory} 
-                                        onChange={(e) => setCustomEditEventCategory(e.target.value)} 
-                                        className="inline-event-input"
-                                        style={{ width: '120px', fontSize: '11px' }}
-                                        required
-                                      />
-                                    )}
-                                    <input 
-                                      type="date" 
-                                      value={editEventDate} 
-                                      onChange={(e) => setEditEventDate(e.target.value)} 
-                                      className="inline-event-input"
-                                      style={{ flex: 1, fontSize: '11px' }} 
-                                    />
-                                    <input 
-                                      type="time" 
-                                      value={editEventTime} 
-                                      onChange={(e) => setEditEventTime(e.target.value)} 
-                                      className="inline-event-input"
-                                      style={{ width: '80px', fontSize: '11px' }} 
-                                    />
-                                  </div>
-                                  <div className="form-row-flex">
-                                    <input 
-                                      type="text" 
-                                      placeholder="詳細メモ" 
-                                      value={editEventNotes} 
-                                      onChange={(e) => setEditEventNotes(e.target.value)} 
-                                      className="inline-event-input"
-                                      style={{ flex: 1, fontSize: '11px' }} 
-                                    />
-                                    <button 
-                                      type="button" 
-                                      onClick={() => saveEventEdit(customer, evt.id)}
-                                      className="inline-action-btn save"
-                                      style={{ fontSize: '11px', padding: '4px 8px' }}
-                                    >
-                                      保存
-                                    </button>
-                                    <button 
-                                      type="button" 
-                                      onClick={cancelEventEdit}
-                                      className="inline-action-btn cancel"
-                                      style={{ fontSize: '11px', padding: '4px 8px' }}
-                                    >
-                                      取消
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return (
-                              <div 
-                                key={evt.id} 
-                                className={`directory-event-row border-${getCategoryColor(evt.category)}`}
-                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}
-                              >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <label className="event-row-label">
-                                    <input 
-                                      type="checkbox" 
-                                      checked={false} 
-                                      onChange={() => toggleEventCompleteInline(customer, evt.id)} 
-                                      className="event-checkbox"
-                                    />
-                                    <span className={`badge badge-${getCategoryColor(evt.category)}`}>{evt.category}</span>
-                                    <span className="event-datetime">📅 {evt.date} {evt.time ? `🕒 ${evt.time}` : ''}</span>
-                                    {evt.notes && <span className="event-notes-label">({evt.notes})</span>}
-                                  </label>
-                                  
-                                  <div className="event-row-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <label htmlFor={`dir_cam_${customer.id}_${evt.id}`} className="event-camera-btn" style={{
-                                      cursor: 'pointer',
-                                      fontSize: '11px',
-                                      padding: '3px 8px',
-                                      backgroundColor: 'rgba(255,255,255,0.05)',
-                                      border: '1px solid var(--border-color)',
-                                      borderRadius: '6px',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      fontWeight: 'bold',
-                                      color: 'var(--text-secondary)'
-                                    }}>
-                                      📷 写真を追加
-                                    </label>
-                                    <input 
-                                      type="file" 
-                                      id={`dir_cam_${customer.id}_${evt.id}`} 
-                                      accept="image/*" 
-                                      style={{ display: 'none' }} 
-                                      onChange={(e) => {
-                                        if (e.target.files && e.target.files[0]) {
-                                          handleEventImageCapture(customer, evt.id, e.target.files[0]);
-                                        }
-                                      }}
-                                    />
-
-                                    <button 
-                                      type="button" 
-                                      onClick={() => startEventEdit(evt)} 
-                                      className="inline-event-action-btn edit-btn"
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--text-secondary)' }}
-                                      title="予定を編集"
-                                    >
-                                      ✏️
-                                    </button>
-                                    <button 
-                                      type="button" 
-                                      onClick={() => deleteEventInline(customer, evt.id)} 
-                                      className="inline-event-action-btn delete-btn"
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--color-red)' }}
-                                      title="予定を削除"
-                                    >
-                                      🗑️
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {/* Event specific thumbnails gallery */}
-                                {evt.images && evt.images.length > 0 && (
-                                  <div className="event-thumbnails-slider" style={{
-                                    display: 'flex',
-                                    gap: '8px',
-                                    overflowX: 'auto',
-                                    padding: '4px 0',
-                                    marginTop: '2px',
-                                    borderTop: '1px dashed rgba(255,255,255,0.05)'
-                                  }}>
-                                    {evt.images.map((img) => (
-                                      <div key={img.id} className="event-thumb-wrapper" style={{
-                                        position: 'relative',
-                                        width: '50px',
-                                        height: '50px',
-                                        flexShrink: 0,
-                                        borderRadius: '6px',
-                                        overflow: 'hidden',
-                                        border: '1px solid var(--border-color)'
-                                      }}>
-                                        <img 
-                                          src={img.data} 
-                                          alt="event doc" 
-                                          onClick={() => setEventPreviewImage(img.data)}
-                                          style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
-                                        />
-                                        <button 
-                                          type="button"
-                                          onClick={() => handleDeleteEventImage(customer, evt.id, img.id)}
-                                          style={{
-                                            position: 'absolute',
-                                            top: '2px',
-                                            right: '2px',
-                                            width: '14px',
-                                            height: '14px',
-                                            borderRadius: '50%',
-                                            backgroundColor: 'rgba(0,0,0,0.6)',
-                                            color: 'white',
-                                            border: 'none',
-                                            fontSize: '8px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            cursor: 'pointer'
-                                          }}
-                                        >
-                                          ✕
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        {[...(customer.events || [])].filter(e => e.status !== 'completed').length === 0 && (
-                          <p className="no-events-text">現在、進行中の予定はありません。</p>
-                        )}
-                      </div>
-
-                      {/* 完了済みの履歴 */}
-                      {[...(customer.events || [])].some(e => e.status === 'completed') && (
-                        <div className="completed-history-block" style={{ marginTop: '12px', borderTop: '1px dashed var(--border-color)', paddingTop: '8px' }}>
-                          <h4 style={{ fontSize: '11px', color: 'var(--text-muted)' }}>✅ 完了済みの履歴</h4>
-                          <div className="directory-events-list completed-list">
-                            {[...(customer.events || [])]
-                              .filter(e => e.status === 'completed')
-                              .sort((a, b) => {
-                                const dateA = a.date ? new Date(`${a.date}T${a.time || '00:00'}:00`).getTime() : Infinity;
-                                const dateB = b.date ? new Date(`${b.date}T${b.time || '00:00'}:00`).getTime() : Infinity;
-                                return dateB - dateA;
-                              })
-                              .map((evt) => {
-                                const isEvtEditing = editingEventId === evt.id;
-                                if (isEvtEditing) {
-                                  return (
-                                    <div key={evt.id} className="directory-event-edit-row" style={{
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      gap: '8px',
-                                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                                      border: '1px solid var(--border-color)',
-                                      borderRadius: '8px',
-                                      padding: '10px 14px',
-                                      marginBottom: '6px'
-                                    }}>
-                                      <div className="form-row-flex">
-                                        <select 
-                                          value={editEventCategory} 
-                                          onChange={(e) => setEditEventCategory(e.target.value)} 
-                                          className="inline-event-input"
-                                          style={{ width: '130px', fontSize: '11px' }}
-                                        >
-                                          <option value="打合せ">打合せ</option>
-                                          <option value="施行">施行</option>
-                                          <option value="搬送">搬送</option>
-                                          <option value="事前相談">事前相談</option>
-                                          <option value="法要 (四十九日/納骨等)">法要 (四十九日/納骨等)</option>
-                                          <option value="一周忌法要">一周忌法要</option>
-                                          <option value="三回忌法要">三回忌法要</option>
-                                          <option value="見積">見積</option>
-                                          <option value="CUSTOM">その他 (自由入力)</option>
-                                        </select>
-                                        {editEventCategory === 'CUSTOM' && (
-                                          <input 
-                                            type="text" 
-                                            placeholder="カテゴリ名" 
-                                            value={customEditEventCategory} 
-                                            onChange={(e) => setCustomEditEventCategory(e.target.value)} 
-                                            className="inline-event-input"
-                                            style={{ width: '120px', fontSize: '11px' }}
-                                            required
-                                          />
-                                        )}
-                                        <input 
-                                          type="date" 
-                                          value={editEventDate} 
-                                          onChange={(e) => setEditEventDate(e.target.value)} 
-                                          className="inline-event-input"
-                                          style={{ flex: 1, fontSize: '11px' }} 
-                                        />
-                                        <input 
-                                          type="time" 
-                                          value={editEventTime} 
-                                          onChange={(e) => setEditEventTime(e.target.value)} 
-                                          className="inline-event-input"
-                                          style={{ width: '80px', fontSize: '11px' }} 
-                                        />
-                                      </div>
-                                      <div className="form-row-flex">
-                                        <input 
-                                          type="text" 
-                                          placeholder="詳細メモ" 
-                                          value={editEventNotes} 
-                                          onChange={(e) => setEditEventNotes(e.target.value)} 
-                                          className="inline-event-input"
-                                          style={{ flex: 1, fontSize: '11px' }} 
-                                        />
-                                        <button 
-                                          type="button" 
-                                          onClick={() => saveEventEdit(customer, evt.id)}
-                                          className="inline-action-btn save"
-                                          style={{ fontSize: '11px', padding: '4px 8px' }}
-                                        >
-                                          保存
-                                        </button>
-                                        <button 
-                                          type="button" 
-                                          onClick={cancelEventEdit}
-                                          className="inline-action-btn cancel"
-                                          style={{ fontSize: '11px', padding: '4px 8px' }}
-                                        >
-                                          取消
-                                        </button>
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                return (
-                                  <div 
-                                    key={evt.id} 
-                                    className="directory-event-row completed-item" 
-                                    style={{ opacity: 0.75, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}
-                                  >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <label className="event-row-label">
-                                        <input 
-                                          type="checkbox" 
-                                          checked={true} 
-                                          onChange={() => toggleEventCompleteInline(customer, evt.id)} 
-                                          className="event-checkbox"
-                                        />
-                                        <span className="badge badge-gray">{evt.category}</span>
-                                        <span className="event-datetime" style={{ textDecoration: 'line-through' }}>📅 {evt.date} {evt.time ? `🕒 ${evt.time}` : ''}</span>
-                                        {evt.notes && <span className="event-notes-label" style={{ textDecoration: 'line-through' }}>({evt.notes})</span>}
-                                      </label>
-                                      
-                                      <div className="event-row-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <label htmlFor={`dir_cam_${customer.id}_${evt.id}`} className="event-camera-btn" style={{
-                                          cursor: 'pointer',
-                                          fontSize: '11px',
-                                          padding: '3px 8px',
-                                          backgroundColor: 'rgba(255,255,255,0.05)',
-                                          border: '1px solid var(--border-color)',
-                                          borderRadius: '6px',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          fontWeight: 'bold',
-                                          color: 'var(--text-secondary)'
-                                        }}>
-                                          📷 写真を追加
-                                        </label>
-                                        <input 
-                                          type="file" 
-                                          id={`dir_cam_${customer.id}_${evt.id}`} 
-                                          accept="image/*" 
-                                          style={{ display: 'none' }} 
-                                          onChange={(e) => {
-                                            if (e.target.files && e.target.files[0]) {
-                                              handleEventImageCapture(customer, evt.id, e.target.files[0]);
-                                            }
-                                          }}
-                                        />
-
-                                        <span 
-                                          style={{ fontSize: '11px', cursor: 'not-allowed', opacity: 0.7, padding: '2px 4px' }}
-                                          title="完了済みの予定は編集ロックされています。未完了に戻すと編集できます。"
-                                        >
-                                          🔒
-                                        </span>
-                                        <button 
-                                          type="button" 
-                                          onClick={() => deleteEventInline(customer, evt.id)} 
-                                          className="inline-event-action-btn delete-btn"
-                                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', color: 'var(--color-red)' }}
-                                          title="予定を削除"
-                                        >
-                                          🗑️
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* Event specific thumbnails gallery */}
-                                    {evt.images && evt.images.length > 0 && (
-                                      <div className="event-thumbnails-slider" style={{
-                                        display: 'flex',
-                                        gap: '8px',
-                                        overflowX: 'auto',
-                                        padding: '4px 0',
-                                        marginTop: '2px',
-                                        borderTop: '1px dashed rgba(255,255,255,0.05)'
-                                      }}>
-                                        {evt.images.map((img) => (
-                                          <div key={img.id} className="event-thumb-wrapper" style={{
-                                            position: 'relative',
-                                            width: '50px',
-                                            height: '50px',
-                                            flexShrink: 0,
-                                            borderRadius: '6px',
-                                            overflow: 'hidden',
-                                            border: '1px solid var(--border-color)'
-                                          }}>
-                                            <img 
-                                              src={img.data} 
-                                              alt="event doc" 
-                                              onClick={() => setEventPreviewImage(img.data)}
-                                              style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
-                                            />
-                                            <button 
-                                              type="button"
-                                              onClick={() => handleDeleteEventImage(customer, evt.id, img.id)}
-                                              style={{
-                                                position: 'absolute',
-                                                top: '2px',
-                                                right: '2px',
-                                                width: '14px',
-                                                height: '14px',
-                                                borderRadius: '50%',
-                                                backgroundColor: 'rgba(0,0,0,0.6)',
-                                                color: 'white',
-                                                border: 'none',
-                                                fontSize: '8px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                cursor: 'pointer'
-                                              }}
-                                            >
-                                              ✕
-                                            </button>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 3. 予定の追加 */}
-                    <div className="customer-section-block add-event-inline-block">
-                      <h4>📅 新しい予定を登録</h4>
-                      <div className="inline-add-event-form">
-                        <div className="form-row-flex">
-                          <select 
-                            value={newEventCategory} 
-                            onChange={(e) => setNewEventCategory(e.target.value)} 
-                            className="inline-event-input select-category"
-                            style={{ width: '130px' }}
-                          >
-                            <option value="打合せ">打合せ</option>
-                            <option value="施行">施行</option>
-                            <option value="搬送">搬送</option>
-                            <option value="事前相談">事前相談</option>
-                            <option value="法要 (四十九日/納骨等)">法要 (四十九日/納骨等)</option>
-                            <option value="一周忌法要">一周忌法要</option>
-                            <option value="三回忌法要">三回忌法要</option>
-                            <option value="見積">見積</option>
-                            <option value="CUSTOM">その他 (自由入力)</option>
-                          </select>
-                          {newEventCategory === 'CUSTOM' && (
-                            <input 
-                              type="text" 
-                              placeholder="自由入力のカテゴリ名" 
-                              value={customEventCategory} 
-                              onChange={(e) => setCustomEventCategory(e.target.value)} 
-                              className="inline-event-input input-custom-category" 
-                              style={{ width: '130px' }}
-                              required
-                            />
-                          )}
-                          <input type="date" value={newEventDate} onChange={(e) => setNewEventDate(e.target.value)} className="inline-event-input input-date" />
-                          <input type="time" value={newEventTime} onChange={(e) => setNewEventTime(e.target.value)} className="inline-event-input input-time" />
-                        </div>
-                        <div className="form-row-flex" style={{ marginTop: '8px' }}>
-                          <input 
-                            type="text" 
-                            placeholder="予定に関する詳細メモ（例：式場手配など）" 
-                            value={newEventNotes} 
-                            onChange={(e) => setNewEventNotes(e.target.value)} 
-                            className="inline-event-input input-notes" 
-                            style={{ flex: 1 }}
-                          />
-                          <button 
-                            type="button" 
-                            onClick={() => handleAddEventInline(customer)} 
-                            className="inline-add-event-submit-btn"
-                          >
-                            ＋ 予定を追加
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-                )}
               </div>
             );
           })
         )}
-      {/* 予定ごとの写真拡大モーダル */}
-      {eventPreviewImage && (
-        <div className="preview-modal-overlay" onClick={() => setEventPreviewImage(null)} style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.85)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 99999,
-          padding: '16px'
-        }}>
-          <div className="preview-modal-content" onClick={(e) => e.stopPropagation()} style={{
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '16px',
-            maxWidth: '500px',
-            width: '100%',
-            overflow: 'hidden',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            <div className="preview-modal-header" style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '12px 16px',
-              borderBottom: '1px solid var(--border-color)'
-            }}>
-              <span className="preview-modal-title" style={{ fontSize: '14px', fontWeight: 'bold' }}>予定添付写真 拡大</span>
-              <button 
-                className="preview-modal-close" 
-                onClick={() => setEventPreviewImage(null)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '20px', cursor: 'pointer' }}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="preview-modal-img-container" style={{ textAlign: 'center', padding: '16px', backgroundColor: 'black' }}>
-              <img src={eventPreviewImage} alt="予定写真" style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '8px' }} />
-            </div>
-            <div className="preview-modal-footer" style={{
-              padding: '12px 16px',
-              borderTop: '1px solid var(--border-color)',
-              fontSize: '12px',
-              color: 'var(--text-secondary)',
-              textAlign: 'center'
-            }}>
-              撮影した書類写真等をご確認いただけます。
-            </div>
-          </div>
-        </div>
-      )}
-
       </div>
 
       <style>{`
@@ -1677,22 +1721,66 @@ export default function CustomerDirectory({
           color: var(--text-muted);
         }
 
-        .customer-details-toggle-btn {
-          width: 100%;
-          padding: 8px;
-          background-color: rgba(255, 255, 255, 0.03);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          color: var(--text-secondary);
-          font-size: 11px;
-          font-weight: 700;
+        /* 顧客カードのクリック対応 */
+        .directory-customer-card.clickable-card {
           cursor: pointer;
-          transition: all 0.2s ease;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        .customer-details-toggle-btn:hover {
-          background-color: var(--bg-tertiary);
+        .directory-customer-card.clickable-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+          border-color: var(--color-gold);
+        }
+
+        .card-arrow-indicator {
+          font-size: 11px;
+          color: var(--text-muted);
+          font-weight: 700;
+        }
+
+        .directory-customer-card.detail-mode {
+          border-left-width: 6px;
+        }
+
+        /* 詳細画面ヘッダー */
+        .directory-detail-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+          border-bottom: 1px solid var(--border-color);
+          padding-bottom: 12px;
+        }
+
+        .back-list-btn {
+          padding: 8px 14px;
+          background-color: var(--bg-secondary);
+          border: 1px solid var(--border-color);
           color: var(--text-primary);
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .back-list-btn:hover {
+          background-color: var(--bg-tertiary);
+        }
+
+        .detail-delete-btn {
+          padding: 8px 14px;
+          background-color: rgba(239, 68, 68, 0.1);
+          color: var(--color-red);
+          border: 1px solid rgba(239, 68, 68, 0.2);
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .detail-delete-btn:hover {
+          background-color: rgba(239, 68, 68, 0.2);
         }
 
         /* Expanded Details panel styling */
@@ -1701,8 +1789,6 @@ export default function CustomerDirectory({
           display: flex;
           flex-direction: column;
           gap: 14px;
-          border-top: 1px dashed var(--border-color);
-          padding-top: 14px;
         }
 
         .customer-section-block {
