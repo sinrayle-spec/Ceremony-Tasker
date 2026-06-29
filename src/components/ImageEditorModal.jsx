@@ -43,24 +43,34 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
     };
   }, [imageData]);
 
-  // 描画座標の取得 (PC/スマホ両対応)
+  // 描画座標の取得 (PC/スマホ両対応・ズーム倍率補正付き)
   const getCoordinates = (e) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
+    
+    // 画面上で実際に見えている(拡大された)サイズを取得
     const rect = canvas.getBoundingClientRect();
     
-    // タッチイベントかマウスイベントか
+    let clientX = 0;
+    let clientY = 0;
+    
     if (e.touches && e.touches.length > 0) {
-      return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top
-      };
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
     } else {
-      return {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      };
+      clientX = e.clientX;
+      clientY = e.clientY;
     }
+    
+    const relativeX = clientX - rect.left;
+    const relativeY = clientY - rect.top;
+    
+    // 画面上の見かけの幅・高さと、キャンバス本来のピクセルサイズの比率を掛けて座標を補正する
+    // これにより拡大率(scale)がどう変化しても、指先とインクの位置が100%ピッタリ一致します。
+    return {
+      x: relativeX * (canvas.width / rect.width),
+      y: relativeY * (canvas.height / rect.height)
+    };
   };
 
   // 2点間の距離計算 (ピンチズーム用)
