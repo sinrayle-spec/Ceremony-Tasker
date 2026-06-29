@@ -1604,13 +1604,15 @@ export default function CustomerDirectory({
 
       <style>{`
         .customer-directory {
+          position: absolute;
+          top: 0;
+          bottom: calc(64px + var(--safe-area-bottom));
+          left: 0;
+          right: 0;
           padding: 16px;
-          padding-bottom: 30px;
-          height: calc(100vh - 115px - var(--safe-area-bottom));
-          height: calc(100dvh - 115px - var(--safe-area-bottom));
+          padding-bottom: 24px;
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
-          box-sizing: border-box;
         }
 
         .directory-header-controls {
