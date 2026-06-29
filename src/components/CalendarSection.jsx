@@ -242,9 +242,12 @@ export default function CalendarSection({ tasks, onSelectDate, selectedDate, onS
       <style>{`
         .calendar-section {
           padding: 16px;
+          padding-bottom: 90px;
           display: flex;
           flex-direction: column;
           flex: 1;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
         }
 
         .calendar-header {
