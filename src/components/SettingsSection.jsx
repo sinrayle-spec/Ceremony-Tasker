@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function SettingsSection({ categories, onUpdateCategories, sects = [], onUpdateSects }) {
+export default function SettingsSection({ categories, onUpdateCategories, sects = [], onUpdateSects, backupUrl = '', onUpdateBackupUrl }) {
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('blue');
   const [editingId, setEditingId] = useState(null);
@@ -10,6 +10,8 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
   const [newSectName, setNewSectName] = useState('');
   const [editingSectIndex, setEditingSectIndex] = useState(null);
   const [editingSectName, setEditingSectName] = useState('');
+  const [urlInput, setUrlInput] = useState(backupUrl);
+  const [showGasGuide, setShowGasGuide] = useState(false);
 
   const colors = [
     { id: 'blue', label: '青', hex: 'var(--color-blue)' },
@@ -222,6 +224,12 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleSaveBackupUrl = (e) => {
+    e.preventDefault();
+    onUpdateBackupUrl(urlInput.trim());
+    alert('自動バックアップの送信先URLを保存しました！');
   };
 
   return (
@@ -446,6 +454,72 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
               </label>
               <p className="card-desc" style={{ fontSize: '11px', marginTop: '4px', color: 'var(--color-red)' }}>※注意: 復元を行うと、現在のアプリ内データは上書きされ消去されます。</p>
             </div>
+          </div>
+        </div>
+
+        {/* 自動クラウドバックアップカード */}
+        <div className="settings-card" style={{ marginTop: '16px', border: '1px solid rgba(37, 99, 235, 0.25)', backgroundColor: 'rgba(37, 99, 235, 0.01)' }}>
+          <h3 style={{ color: 'var(--color-blue)' }}>🌐 自動クラウドバックアップ (Google連携)</h3>
+          <p className="card-desc">Googleスプレッドシートと連携し、データが更新されるたびに暗号化データをクラウドに自動送信して保管します。突然の故障・紛失でも100%復旧できます。</p>
+
+          <form onSubmit={handleSaveBackupUrl} className="add-cat-form" style={{ marginTop: '12px' }}>
+            <div className="form-group">
+              <label>スプレッドシートのWeb App URL</label>
+              <input
+                type="url"
+                placeholder="https://script.google.com/macros/s/.../exec"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                style={{ fontSize: '12px' }}
+              />
+            </div>
+            <button type="submit" className="add-submit-btn" style={{ backgroundColor: 'var(--color-blue)' }}>
+              💾 送信先URLを保存
+            </button>
+          </form>
+
+          {/* 導入かんたん手順ガイド */}
+          <div style={{ marginTop: '14px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+            <button 
+              type="button" 
+              onClick={() => setShowGasGuide(!showGasGuide)} 
+              className="action-icon-btn" 
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', padding: '8px', borderRadius: '6px', backgroundColor: 'var(--bg-tertiary)', border: 'none', cursor: 'pointer' }}
+            >
+              <span>⚙️ スプレッドシートとの連携手順</span>
+              <span>{showGasGuide ? '▲ 閉じる' : '▼ 開く'}</span>
+            </button>
+
+            {showGasGuide && (
+              <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px', backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: '6px', textAlign: 'left' }}>
+                <p><strong>【ステップ1】スプレッドシートの準備</strong></p>
+                <ol style={{ paddingLeft: '20px', margin: '4px 0' }}>
+                  <li>Googleドライブで新規の「Googleスプレッドシート」を作成します。</li>
+                  <li>メニューの「拡張機能」 ＞ <strong>「Apps Script」</strong> を開きます。</li>
+                </ol>
+
+                <p><strong>【ステップ2】スクリプトの貼り付け</strong></p>
+                <p>表示されたエディタのコードをすべて消去し、以下のコードを貼り付けて保存（上書き保存アイコン）します：</p>
+                
+                <pre style={{ backgroundColor: 'var(--bg-primary)', padding: '8px', borderRadius: '4px', overflowX: 'auto', fontSize: '11px', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+{"function doPost(e) {\n  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();\n  var data = JSON.parse(e.postData.contents);\n  sheet.appendRow([\n    new Date(),\n    data.version,\n    data.tasks,\n    data.categories,\n    data.sects,\n    data.pin_hash\n  ]);\n  return ContentService.createTextOutput(JSON.stringify({ status: \"success\" }))\n                       .setMimeType(ContentService.MimeType.JSON);\n}\n\nfunction doOptions(e) {\n  return ContentService.createTextOutput(\"\")\n                       .setMimeType(ContentService.MimeType.TEXT);\n}"}
+                </pre>
+
+                <p><strong>【ステップ3】Webアプリとしてデプロイ</strong></p>
+                <ol style={{ paddingLeft: '20px', margin: '4px 0' }}>
+                  <li>エディタ右上の「デプロイ」 ＞ <strong>「新しいデプロイ」</strong> を選択します。</li>
+                  <li>種類の選択（歯車マーク）で <strong>「Webアプリ」</strong> を選びます。</li>
+                  <li>設定を変更します：
+                    <ul style={{ paddingLeft: '20px', margin: '2px 0' }}>
+                      <li>次のユーザーとして実行: <strong>「自分」</strong></li>
+                      <li>アクセスできるユーザー: <strong>「全員」</strong> (※重要: ログイン不要でデータ送信できるようにします)</li>
+                    </ul>
+                  </li>
+                  <li>「デプロイ」ボタンを押し、アクセス権を承認します。</li>
+                  <li>発行された <strong>「ウェブアプリのURL」</strong> をコピーし、上の入力欄に貼り付けて保存してください。</li>
+                </ol>
+              </div>
+            )}
           </div>
         </div>
 

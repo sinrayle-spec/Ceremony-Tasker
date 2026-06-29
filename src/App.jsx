@@ -12,6 +12,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('tasks'); // 'tasks', 'calendar', 'gallery', 'customers', 'settings'
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [targetEditTaskId, setTargetEditTaskId] = useState(null);
+  const [backupUrl, setBackupUrl] = useState(() => localStorage.getItem('ct_backup_url') || '');
 
   // 暗号化対応のカスタムストレージでタスク一覧を管理
   const [tasks, setTasks] = useEncryptedStorage('ct_tasks', [], passcode);
@@ -97,6 +98,47 @@ export default function App() {
       }
     }
   }, [passcode, categories, sects, setCategories, setSects]);
+
+  // Googleスプレッドシートへの自動クラウドバックアップ
+  useEffect(() => {
+    if (!backupUrl || !passcode) return;
+
+    const timer = setTimeout(() => {
+      const runAutoBackup = async () => {
+        try {
+          const tasksData = localStorage.getItem('ct_tasks') || '';
+          const categoriesData = localStorage.getItem('ct_categories') || '';
+          const sectsData = localStorage.getItem('ct_sects') || '';
+          const pinHash = localStorage.getItem('ct_pin_hash') || '';
+
+          const payload = {
+            version: '1.1',
+            timestamp: new Date().toISOString(),
+            tasks: tasksData,
+            categories: categoriesData,
+            sects: sectsData,
+            pin_hash: pinHash
+          };
+
+          await fetch(backupUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+          console.log('クラウド自動バックアップ送信完了');
+        } catch (err) {
+          console.error('自動バックアップ失敗:', err);
+        }
+      };
+
+      runAutoBackup();
+    }, 5000); // 変更から5秒後に送信
+
+    return () => clearTimeout(timer);
+  }, [tasks, categories, sects, backupUrl, passcode]);
 
   // 通知許可のリクエスト
   useEffect(() => {
@@ -230,6 +272,11 @@ export default function App() {
               onUpdateCategories={setCategories}
               sects={sects}
               onUpdateSects={setSects}
+              backupUrl={backupUrl}
+              onUpdateBackupUrl={(url) => {
+                localStorage.setItem('ct_backup_url', url);
+                setBackupUrl(url);
+              }}
             />
           )}
        </main>
