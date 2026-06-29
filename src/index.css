@@ -108,25 +108,7 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 2px var(--border-glow);
 }
 
-/* スクロールバーをお洒落に表示してスクロールロックを解消 */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
-  border-radius: 3px;
-  transition: background-color 0.2s;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-gold);
-}
 
 .text-gold { color: var(--color-gold); }
 .text-gold-light { color: var(--color-gold-light); }
