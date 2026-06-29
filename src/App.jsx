@@ -20,18 +20,14 @@ export default function App() {
   // カスタムカテゴリー設定の管理
   const [categories, setCategories] = useEncryptedStorage('ct_categories', [
     { id: 'cat_1', name: '施行', color: 'red' },
-    { id: 'cat_2', name: '搬送', color: 'orange' },
-    { id: 'cat_3', name: '打合せ', color: 'blue' },
-    { id: 'cat_4', name: '事前相談', color: 'green' },
-    { id: 'cat_5', name: '法要', color: 'purple' },
-    { id: 'cat_6', name: 'アフター', color: 'pink' },
-    { id: 'cat_7', name: '社内業務', color: 'gray' },
-    { id: 'cat_8', name: '見積', color: 'yellow' }
+    { id: 'cat_2', name: '打合せ', color: 'blue' },
+    { id: 'cat_3', name: '法事', color: 'purple' },
+    { id: 'cat_4', name: '社内業務', color: 'gray' }
   ], passcode);
 
   // カスタム宗派設定の管理
   const [sects, setSects] = useEncryptedStorage('ct_sects', [
-    '浄土真宗', '真言宗', '曹洞宗', '臨済宗', '日蓮宗', '天台宗', '浄土宗', '神道', 'キリスト教'
+    '浄土真宗本願寺派(西)', '真宗大谷派(東)', '法華宗', '曹洞宗', '日蓮宗', '真言宗', '浄土宗', '臨済宗', '創価学会'
   ], passcode);
 
   // 開発中のサービスワーカー強制解除（キャッシュバグを自動クリアするため）
@@ -77,6 +73,28 @@ export default function App() {
       }
     }
   }, [tasks, setTasks]);
+
+  // カテゴリーと宗派の新しいデフォルト値への一括アップデートマイグレーション (一度のみ)
+  useEffect(() => {
+    if (passcode) {
+      const hasMigratedDefaultSettings = localStorage.getItem('ct_migrated_defaults_v2');
+      if (!hasMigratedDefaultSettings) {
+        const newDefaultCategories = [
+          { id: 'cat_1', name: '施行', color: 'red' },
+          { id: 'cat_2', name: '打合せ', color: 'blue' },
+          { id: 'cat_3', name: '法事', color: 'purple' },
+          { id: 'cat_4', name: '社内業務', color: 'gray' }
+        ];
+        const newDefaultSects = [
+          '浄土真宗本願寺派(西)', '真宗大谷派(東)', '法華宗', '曹洞宗', '日蓮宗', '真言宗', '浄土宗', '臨済宗', '創価学会'
+        ];
+
+        setCategories(newDefaultCategories);
+        setSects(newDefaultSects);
+        localStorage.setItem('ct_migrated_defaults_v2', 'true');
+      }
+    }
+  }, [passcode, setCategories, setSects]);
 
   // 通知許可のリクエスト
   useEffect(() => {
