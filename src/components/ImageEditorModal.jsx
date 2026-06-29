@@ -4,7 +4,7 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   
-  const [tool, setTool] = useState('pen'); // 'pen', 'eraser', 'text', 'pan' (移動)
+  const [tool, setTool] = useState('zoom'); // 'zoom' (ズーム/移動), 'pen', 'eraser', 'text'
   const [color, setColor] = useState('#e11d48'); // デフォルト赤色
   const [brushSize, setBrushSize] = useState(4);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -15,6 +15,8 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
 
   const lastPos = useRef({ x: 0, y: 0 });
   const bgImageRef = useRef(null);
+  const touchStartDist = useRef(0);
+  const initialScale = useRef(1.0);
 
   // 初期画像のロードとキャンバスサイズの設定
   useEffect(() => {
@@ -61,9 +63,63 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
     }
   };
 
+  // 2点間の距離計算 (ピンチズーム用)
+  const getTouchDistance = (touches) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // タッチ開始ハンドラ (ピンチズーム・スクロール両対応)
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      // 2本指タッチでピンチズームモード開始
+      const dist = getTouchDistance(e.touches);
+      touchStartDist.current = dist;
+      initialScale.current = scale;
+      setIsDrawing(false);
+    } else if (e.touches.length === 1) {
+      if (tool === 'zoom') {
+        // ズームモード時の1本指ドラッグは標準スクロール（移動）に任せるためスルー
+        return;
+      }
+      startDrawing(e);
+    }
+  };
+
+  // タッチ移動ハンドラ (ピンチズーム・描画両対応)
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 2) {
+      // 2本指ズーム中はスクロールを完全に防止
+      if (e.cancelable) e.preventDefault();
+      
+      const dist = getTouchDistance(e.touches);
+      if (touchStartDist.current > 0) {
+        const factor = dist / touchStartDist.current;
+        let newScale = initialScale.current * factor;
+        newScale = Math.max(1.0, Math.min(3.0, newScale)); // 1.0〜3.0倍
+        setScale(parseFloat(newScale.toFixed(2)));
+      }
+    } else if (e.touches.length === 1) {
+      if (tool === 'zoom') {
+        // ズームモード時は標準スクロールを有効にするためスルー
+        return;
+      }
+      draw(e);
+    }
+  };
+
+  // タッチ終了ハンドラ
+  const handleTouchEnd = (e) => {
+    if (e.touches.length < 2) {
+      touchStartDist.current = 0;
+    }
+    stopDrawing();
+  };
+
   // 描画開始
   const startDrawing = (e) => {
-    if (tool === 'pan') {
+    if (tool === 'zoom') {
       setIsDrawing(false);
       return;
     }
@@ -80,7 +136,7 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
 
   // 描画中
   const draw = (e) => {
-    if (tool === 'pan') return;
+    if (tool === 'zoom') return;
     if (!isDrawing || tool === 'text') return;
     
     // スクロールを防止する
@@ -192,9 +248,9 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
               onMouseMove={draw}
               onMouseUp={stopDrawing}
               onMouseLeave={stopDrawing}
-              onTouchStart={startDrawing}
-              onTouchMove={draw}
-              onTouchEnd={stopDrawing}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
               className="editor-canvas"
               style={{
                 transform: `scale(${scale})`,
@@ -202,7 +258,7 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
                 position: 'absolute',
                 top: 0,
                 left: 0,
-                touchAction: tool === 'pan' ? 'auto' : 'none'
+                touchAction: tool === 'zoom' ? 'auto' : 'none'
               }}
             />
 
@@ -236,6 +292,13 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
             <div className="tool-selector">
               <button 
                 type="button" 
+                className={`tool-btn ${tool === 'zoom' ? 'active' : ''}`}
+                onClick={() => setTool('zoom')}
+              >
+                🔍 ズーム移動
+              </button>
+              <button 
+                type="button" 
                 className={`tool-btn ${tool === 'pen' ? 'active' : ''}`}
                 onClick={() => setTool('pen')}
               >
@@ -255,18 +318,11 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
               >
                 🔤 文字入れ
               </button>
-              <button 
-                type="button" 
-                className={`tool-btn ${tool === 'pan' ? 'active' : ''}`}
-                onClick={() => setTool('pan')}
-              >
-                ✋ 移動
-              </button>
             </div>
           </div>
 
           {/* 色選択（ペンの時のみ） */}
-          {tool !== 'eraser' && (
+          {(tool === 'pen' || tool === 'text') && (
             <div className="toolbar-row">
               <span className="row-label">カラー:</span>
               <div className="color-selector">
@@ -405,7 +461,6 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
 
         .editor-canvas {
           display: block;
-          touch-action: none; /* スマホブラウザのスクロール等を防止 */
         }
 
         /* インラインテキスト入力 */
