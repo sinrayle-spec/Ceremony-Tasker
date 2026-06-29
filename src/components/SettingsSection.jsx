@@ -149,6 +149,81 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
     }
   };
 
+  const handleExportData = () => {
+    try {
+      const tasksData = localStorage.getItem('ct_tasks') || '';
+      const categoriesData = localStorage.getItem('ct_categories') || '';
+      const sectsData = localStorage.getItem('ct_sects') || '';
+      const pinHash = localStorage.getItem('ct_pin_hash') || '';
+
+      const backupObj = {
+        version: '1.1',
+        timestamp: new Date().toISOString(),
+        tasks: tasksData,
+        categories: categoriesData,
+        sects: sectsData,
+        pin_hash: pinHash
+      };
+
+      const jsonString = JSON.stringify(backupObj, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ct_backup_${dateStr}.ctb`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert('バックアップファイルの作成に失敗しました。');
+    }
+  };
+
+  const handleImportData = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!window.confirm('本当に復元しますか？現在のデータはすべて消去され、バックアップ時点の内容に置き換わります。')) {
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const backupObj = JSON.parse(event.target.result);
+
+        if (!backupObj.tasks || !backupObj.pin_hash) {
+          throw new Error('無効なバックアップファイル形式です。');
+        }
+
+        localStorage.setItem('ct_tasks', backupObj.tasks);
+        localStorage.setItem('ct_pin_hash', backupObj.pin_hash);
+        
+        if (backupObj.categories) {
+          localStorage.setItem('ct_categories', backupObj.categories);
+        }
+        if (backupObj.sects) {
+          localStorage.setItem('ct_sects', backupObj.sects);
+        }
+
+        localStorage.setItem('ct_migrated_defaults_v3', 'true');
+
+        alert('復元が成功しました！変更を反映するためアプリを再起動します。');
+        window.location.reload(true);
+      } catch (err) {
+        console.error(err);
+        alert('復元に失敗しました。ファイルが破損しているか、正しいバックアップファイルではありません。');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   return (
     <div className="settings-section fade-in">
       <div className="settings-header">
@@ -337,6 +412,39 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+
+        {/* データ管理とバックアップカード */}
+        <div className="settings-card" style={{ marginTop: '16px', border: '1px solid rgba(217, 119, 6, 0.25)', backgroundColor: 'rgba(217, 119, 6, 0.01)' }}>
+          <h3 style={{ color: 'var(--color-gold)' }}>💾 データ管理とバックアップ</h3>
+          <p className="card-desc">アプリ内のデータ（案件・タスク、カテゴリ、宗派、パスコード設定）をまとめてバックアップ、または復元します。</p>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+            <div>
+              <button 
+                type="button" 
+                onClick={handleExportData} 
+                className="add-submit-btn" 
+                style={{ background: 'linear-gradient(135deg, var(--color-gold), var(--color-gold-dark))' }}
+              >
+                📥 バックアップファイルの作成
+              </button>
+              <p className="card-desc" style={{ fontSize: '11px', marginTop: '4px' }}>※暗号化された安全なバックアップファイルをダウンロードします。LINEやファイル保存等に保管してください。</p>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '4px' }}>
+              <label className="add-submit-btn" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', display: 'block', textAlign: 'center', cursor: 'pointer', margin: 0 }}>
+                📤 バックアップからデータを復元
+                <input 
+                  type="file" 
+                  accept=".ctb,.json" 
+                  onChange={handleImportData} 
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <p className="card-desc" style={{ fontSize: '11px', marginTop: '4px', color: 'var(--color-red)' }}>※注意: 復元を行うと、現在のアプリ内データは上書きされ消去されます。</p>
             </div>
           </div>
         </div>
