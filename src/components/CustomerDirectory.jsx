@@ -566,19 +566,15 @@ export default function CustomerDirectory({
 
   const displayCustomers = getFilteredCustomers();
 
-  // --- 詳細ビューのレンダリング (選択された顧客のみ) ---
-  if (selectedCustomerId) {
-    const customer = tasks.find(t => t.id === selectedCustomerId);
-    if (!customer) {
-      setSelectedCustomerId(null);
-      return null;
-    }
+  // --- 詳細・一覧ビューの共通レンダリング構造 ---
+  const customer = selectedCustomerId ? tasks.find(t => t.id === selectedCustomerId) : null;
+  const active = customer ? isCustomerActive(customer) : false;
+  const isEditing = customer ? (editingCustomerId === customer.id) : false;
 
-    const active = isCustomerActive(customer);
-    const isEditing = editingCustomerId === customer.id;
-
-    return (
-      <div className="customer-directory fade-in">
+  return (
+    <div className="customer-directory fade-in">
+      {customer ? (
+        <>
         {/* 詳細ヘッダー */}
         <div className="directory-detail-header">
           <button 
@@ -1381,13 +1377,9 @@ export default function CustomerDirectory({
             </div>
           </div>
         )}
-      </div>
-    );
-  }
-
-  // --- 顧客一覧ビューのレンダリング (デフォルト) ---
-  return (
-    <div className="customer-directory fade-in">
+        </>
+      ) : (
+        <>
       <div className="directory-header-controls">
         <h2 className="directory-title">👤 顧客名簿・基本情報管理</h2>
         
@@ -1606,11 +1598,11 @@ export default function CustomerDirectory({
         .customer-directory {
           padding: 16px;
           padding-bottom: 120px;
-          display: block;
-          height: 100%;
+          display: flex;
+          flex-direction: column;
+          flex: 1;
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
-          box-sizing: border-box;
         }
 
         .directory-header-controls {
@@ -2028,6 +2020,8 @@ export default function CustomerDirectory({
           <option key={idx} value={s} />
         ))}
       </datalist>
+        </>
+      )}
     </div>
   );
 }
