@@ -3,7 +3,6 @@ import LockScreen from './components/LockScreen';
 import Navigation from './components/Navigation';
 import CalendarSection from './components/CalendarSection';
 import TaskSection from './components/TaskSection';
-import GallerySection from './components/GallerySection';
 import CustomerDirectory from './components/CustomerDirectory';
 import SettingsSection from './components/SettingsSection';
 import { useEncryptedStorage } from './hooks/useLocalStorage';
@@ -209,11 +208,8 @@ export default function App() {
              selectedDate={selectedDate}
              onSelectDate={setSelectedDate}
              onSelectTask={handleSelectTaskFromCalendar}
-           />
-         )}
-         {activeTab === 'gallery' && (
-           <GallerySection tasks={tasks} />
-         )}
+          />
+        )}
           {activeTab === 'customers' && (
             <CustomerDirectory 
               tasks={tasks}
