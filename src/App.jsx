@@ -278,6 +278,7 @@ export default function App() {
           width: 100%;
           min-height: 0;
           overflow: hidden;
+          position: relative;
         }
       `}</style>
     </div>
