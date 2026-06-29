@@ -8,7 +8,13 @@ export default defineConfig({
     react(),
     basicSsl()
   ],
+  base: '/Ceremony-Tasker/',
   server: {
+    port: 8080,
+    host: true,
+    https: true
+  },
+  preview: {
     port: 8080,
     host: true,
     https: true
