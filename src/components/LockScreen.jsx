@@ -74,6 +74,30 @@ export default function LockScreen({ onUnlock }) {
     setError('');
   };
 
+  const handleForceUpdate = async () => {
+    if (window.confirm('アプリのプログラムキャッシュをクリアし、最新版を強制ロードします。よろしいですか？\n(入力されたデータは消えません)')) {
+      try {
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (let registration of registrations) {
+            await registration.unregister();
+          }
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (let key of keys) {
+            await caches.delete(key);
+          }
+        }
+        localStorage.removeItem('ct_migrated_defaults_v3');
+        window.location.reload(true);
+      } catch (err) {
+        console.error(err);
+        alert('アップデート処理に失敗しました。');
+      }
+    }
+  };
+
   return (
     <div className="lock-screen fade-in">
       <div className="lock-header">
@@ -122,6 +146,27 @@ export default function LockScreen({ onUnlock }) {
           ⌫
         </button>
       </div>
+
+      {/* ログイン前の強制アップデートボタン */}
+      <button 
+        type="button" 
+        onClick={handleForceUpdate} 
+        style={{
+          fontSize: '12px',
+          color: 'var(--text-muted)',
+          textDecoration: 'underline',
+          backgroundColor: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          marginTop: '12px',
+          marginBottom: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px'
+        }}
+      >
+        <span>🔄 アプリの強制アップデート（キャッシュクリア）</span>
+      </button>
 
       {/* コンプライアンスポリシーの提示 */}
       <div className="compliance-banner">
