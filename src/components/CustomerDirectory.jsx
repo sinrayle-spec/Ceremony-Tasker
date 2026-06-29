@@ -1603,6 +1603,8 @@ export default function CustomerDirectory({
           flex: 1;
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
+          min-height: 0;
+          max-height: 100%;
         }
 
         .directory-header-controls {
