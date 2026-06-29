@@ -61,6 +61,19 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
     setEditingId(null);
   };
 
+  // カテゴリーの並び替え処理
+  const handleMoveCategory = (index, direction) => {
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= categories.length) return;
+
+    const updated = [...categories];
+    const temp = updated[index];
+    updated[index] = updated[nextIndex];
+    updated[nextIndex] = temp;
+
+    onUpdateCategories(updated);
+  };
+
   const handleAddSect = (e) => {
     e.preventDefault();
     if (!newSectName.trim()) return;
@@ -99,6 +112,19 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
     setEditingSectIndex(null);
   };
 
+  // 宗派の並び替え処理
+  const handleMoveSect = (index, direction) => {
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= sects.length) return;
+
+    const updated = [...sects];
+    const temp = updated[index];
+    updated[index] = updated[nextIndex];
+    updated[nextIndex] = temp;
+
+    onUpdateSects(updated);
+  };
+
   return (
     <div className="settings-section fade-in">
       <div className="settings-header">
@@ -108,7 +134,7 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
       <div className="settings-content">
         <div className="settings-card">
           <h3>📅 予定カテゴリーのカスタマイズ</h3>
-          <p className="card-desc">案件や予定を作成する際の選択肢（カテゴリー名と枠線の色）を自由に追加・変更できます。</p>
+          <p className="card-desc">案件や予定を作成する際の選択肢（カテゴリー名と枠線の色）を自由に追加・変更、および順序の並び替えができます。</p>
 
           <form onSubmit={handleAddCategory} className="add-cat-form">
             <div className="form-group">
@@ -143,7 +169,7 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
           <div className="categories-list-container">
             <h4>登録中のカテゴリー一覧 ({categories.length})</h4>
             <div className="categories-grid">
-              {categories.map(cat => {
+              {categories.map((cat, index) => {
                 const isEditing = editingId === cat.id;
                 return (
                   <div key={cat.id} className="category-item-card" style={{ borderLeft: `4px solid var(--color-${cat.color})` }}>
@@ -173,8 +199,30 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
                       </div>
                     ) : (
                       <div className="view-mode-container">
-                        <div className="cat-info">
-                          <span className={`badge badge-${cat.color}`}>{cat.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <div className="cat-reorder-actions">
+                            <button 
+                              type="button"
+                              onClick={() => handleMoveCategory(index, 'up')} 
+                              disabled={index === 0}
+                              className="reorder-btn"
+                              title="上へ"
+                            >
+                              ▲
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => handleMoveCategory(index, 'down')} 
+                              disabled={index === categories.length - 1}
+                              className="reorder-btn"
+                              title="下へ"
+                            >
+                              ▼
+                            </button>
+                          </div>
+                          <div className="cat-info">
+                            <span className={`badge badge-${cat.color}`}>{cat.name}</span>
+                          </div>
                         </div>
                         <div className="cat-actions">
                           <button onClick={() => startEdit(cat)} className="action-icon-btn" title="編集">✏️</button>
@@ -192,7 +240,7 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
         {/* 宗派のカスタマイズカード */}
         <div className="settings-card" style={{ marginTop: '16px' }}>
           <h3>🛐 宗派のカスタマイズ</h3>
-          <p className="card-desc">顧客名簿に登録する際の「宗派」の選択肢を自由に追加・変更できます。</p>
+          <p className="card-desc">顧客名簿に登録する際の「宗派」の選択肢を自由に追加・変更、および順序の並び替えができます。</p>
 
           <form onSubmit={handleAddSect} className="add-cat-form">
             <div className="form-group">
@@ -231,8 +279,30 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
                       </div>
                     ) : (
                       <div className="view-mode-container">
-                        <div className="cat-info">
-                          <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{sectName}</span>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <div className="cat-reorder-actions">
+                            <button 
+                              type="button"
+                              onClick={() => handleMoveSect(index, 'up')} 
+                              disabled={index === 0}
+                              className="reorder-btn"
+                              title="上へ"
+                            >
+                              ▲
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => handleMoveSect(index, 'down')} 
+                              disabled={index === sects.length - 1}
+                              className="reorder-btn"
+                              title="下へ"
+                            >
+                              ▼
+                            </button>
+                          </div>
+                          <div className="cat-info">
+                            <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{sectName}</span>
+                          </div>
                         </div>
                         <div className="cat-actions">
                           <button onClick={() => startEditSect(index, sectName)} className="action-icon-btn" title="編集">✏️</button>
@@ -457,6 +527,37 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
 
         .action-icon-btn.delete:hover {
           background-color: rgba(239,68,68,0.1);
+        }
+
+        /* 順序並べ替え用アクションCSS */
+        .cat-reorder-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          margin-right: 12px;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .reorder-btn {
+          font-size: 8px;
+          color: var(--text-secondary);
+          width: 18px;
+          height: 18px;
+          line-height: 16px;
+          border: 1px solid var(--border-color);
+          border-radius: 4px;
+          background-color: var(--bg-secondary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+        }
+
+        .reorder-btn:disabled {
+          opacity: 0.15;
+          cursor: not-allowed;
+          pointer-events: none;
         }
       `}</style>
     </div>
