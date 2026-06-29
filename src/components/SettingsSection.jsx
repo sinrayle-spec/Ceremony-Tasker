@@ -125,6 +125,30 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
     onUpdateSects(updated);
   };
 
+  const handleForceUpdate = async () => {
+    if (window.confirm('アプリのプログラムキャッシュをクリアし、最新版を強制ロードします。よろしいですか？\n(入力されたデータは消えません)')) {
+      try {
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (let registration of registrations) {
+            await registration.unregister();
+          }
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          for (let key of keys) {
+            await caches.delete(key);
+          }
+        }
+        localStorage.removeItem('ct_migrated_defaults_v3');
+        window.location.reload(true);
+      } catch (err) {
+        console.error(err);
+        alert('アップデート処理に失敗しました。画面を一度閉じて開き直してください。');
+      }
+    }
+  };
+
   return (
     <div className="settings-section fade-in">
       <div className="settings-header">
@@ -315,6 +339,20 @@ export default function SettingsSection({ categories, onUpdateCategories, sects 
               })}
             </div>
           </div>
+        </div>
+
+        {/* システムアップデートカード */}
+        <div className="settings-card" style={{ marginTop: '16px', border: '1px solid rgba(225, 29, 72, 0.25)', backgroundColor: 'rgba(225, 29, 72, 0.02)' }}>
+          <h3 style={{ color: 'var(--color-red)' }}>🔄 システムアップデート</h3>
+          <p className="card-desc">スマホアプリのプログラムキャッシュをクリアし、最新バージョンへ強制更新します。※登録済みのデータ（名簿やタスクなど）は消去されません。</p>
+          <button 
+            type="button" 
+            onClick={handleForceUpdate} 
+            className="add-submit-btn" 
+            style={{ backgroundColor: 'var(--color-red)', marginTop: '8px' }}
+          >
+            キャッシュをクリアして強制更新
+          </button>
         </div>
       </div>
 
