@@ -34,6 +34,19 @@ export default function App() {
     '浄土真宗', '真言宗', '曹洞宗', '臨済宗', '日蓮宗', '天台宗', '浄土宗', '神道', 'キリスト教'
   ], passcode);
 
+  // 開発中のサービスワーカー強制解除（キャッシュバグを自動クリアするため）
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (let registration of registrations) {
+          registration.unregister().then(() => {
+            console.log('Service Worker unregistered successfully');
+          });
+        }
+      });
+    }
+  }, []);
+
   // 旧データ形式から新データ形式(複数予定/イベント対応)へのマイグレーション
   useEffect(() => {
     if (tasks && tasks.length > 0) {
@@ -142,7 +155,7 @@ export default function App() {
           <svg className="header-logo" viewBox="0 0 512 512">
             <path d="M256,120 C220,190 225,300 256,360 C287,300 292,190 256,120 Z" fill="#fbbf24" />
           </svg>
-          <span className="app-title-text">Ceremony Tasker</span>
+          <span className="app-title-text">Ceremony Tasker <small style={{ fontSize: '10px', opacity: 0.5 }}>v11</small></span>
         </div>
         
         {/* 手動ロックボタン (南京錠マーク) */}
