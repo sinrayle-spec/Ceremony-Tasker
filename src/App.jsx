@@ -290,7 +290,7 @@ export default function App() {
           flex-direction: column;
           width: 100%;
           min-height: 0;
-          overflow-y: auto;
+          overflow: hidden;
         }
       `}</style>
     </div>

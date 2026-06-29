@@ -578,7 +578,7 @@ export default function CustomerDirectory({
     const isEditing = editingCustomerId === customer.id;
 
     return (
-      <div className="customer-directory fade-in">
+      <div className="customer-directory fade-in" style={{ overflowY: 'auto', height: 'calc(100dvh - 120px)' }}>
         {/* 詳細ヘッダー */}
         <div className="directory-detail-header">
           <button 
@@ -1606,9 +1606,8 @@ export default function CustomerDirectory({
         .customer-directory {
           padding: 16px;
           padding-bottom: 90px;
-          display: flex;
-          flex-direction: column;
           flex: 1;
+          min-height: 0;
           overflow-y: auto;
         }
 
