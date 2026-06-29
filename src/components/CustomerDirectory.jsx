@@ -607,15 +607,14 @@ export default function CustomerDirectory({
         </div>
 
         {/* 顧客詳細カード */}
-        <div className={`directory-customer-card detail-mode ${active ? 'active-status' : 'completed-status'}`}>
-          <div className="customer-card-header" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '12px', marginBottom: '12px' }}>
-            <div className="customer-title-block">
-              <span className="customer-card-title" style={{ fontSize: '20px' }}>{customer.title}</span>
+          {/* タイトル行 (カードから独立) */}
+          <div className="customer-detail-title-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border-color)' }}>
+            <div className="customer-title-block" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span className="customer-card-title" style={{ fontSize: '20px', fontWeight: 'bold' }}>{customer.title}</span>
               <span className={`status-badge ${active ? 'badge-active' : 'badge-completed'}`}>
                 {active ? '進行中' : '施行完了'}
               </span>
             </div>
-            
             <div className="customer-card-actions">
               <button 
                 type="button"
@@ -1318,7 +1317,6 @@ export default function CustomerDirectory({
               </div>
             </div>
           </div>
-        </div>
 
         {/* 予定ごとの写真拡大モーダル */}
         {eventPreviewImage && (
