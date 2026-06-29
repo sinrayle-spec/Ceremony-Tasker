@@ -155,7 +155,7 @@ export default function App() {
           <svg className="header-logo" viewBox="0 0 512 512">
             <path d="M256,120 C220,190 225,300 256,360 C287,300 292,190 256,120 Z" fill="#fbbf24" />
           </svg>
-          <span className="app-title-text">Ceremony Tasker <small style={{ fontSize: '10px', opacity: 0.5 }}>v11</small></span>
+          <span className="app-title-text">Ceremony Tasker <small style={{ fontSize: '10px', opacity: 0.5 }}>v12</small></span>
         </div>
         
         {/* 手動ロックボタン (南京錠マーク) */}

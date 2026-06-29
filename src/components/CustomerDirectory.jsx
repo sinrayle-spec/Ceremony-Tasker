@@ -1606,11 +1606,11 @@ export default function CustomerDirectory({
         .customer-directory {
           position: absolute;
           top: 0;
-          bottom: 0;
+          bottom: calc(64px + var(--safe-area-bottom));
           left: 0;
           right: 0;
           padding: 16px;
-          padding-bottom: 40px;
+          padding-bottom: 30px;
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
         }
