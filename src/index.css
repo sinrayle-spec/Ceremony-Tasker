@@ -108,7 +108,10 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 2px var(--border-glow);
 }
 
-
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
 
 .text-gold { color: var(--color-gold); }
 .text-gold-light { color: var(--color-gold-light); }

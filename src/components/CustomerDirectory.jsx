@@ -566,15 +566,19 @@ export default function CustomerDirectory({
 
   const displayCustomers = getFilteredCustomers();
 
-  // --- 詳細・一覧ビューの共通レンダリング構造 ---
-  const customer = selectedCustomerId ? tasks.find(t => t.id === selectedCustomerId) : null;
-  const active = customer ? isCustomerActive(customer) : false;
-  const isEditing = customer ? (editingCustomerId === customer.id) : false;
+  // --- 詳細ビューのレンダリング (選択された顧客のみ) ---
+  if (selectedCustomerId) {
+    const customer = tasks.find(t => t.id === selectedCustomerId);
+    if (!customer) {
+      setSelectedCustomerId(null);
+      return null;
+    }
 
-  return (
-    <div className="customer-directory fade-in">
-      {customer ? (
-        <>
+    const active = isCustomerActive(customer);
+    const isEditing = editingCustomerId === customer.id;
+
+    return (
+      <div className="customer-directory fade-in">
         {/* 詳細ヘッダー */}
         <div className="directory-detail-header">
           <button 
@@ -607,14 +611,15 @@ export default function CustomerDirectory({
         </div>
 
         {/* 顧客詳細カード */}
-          {/* タイトル行 (カードから独立) */}
-          <div className="customer-detail-title-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border-color)' }}>
-            <div className="customer-title-block" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span className="customer-card-title" style={{ fontSize: '20px', fontWeight: 'bold' }}>{customer.title}</span>
+        <div className={`directory-customer-card detail-mode ${active ? 'active-status' : 'completed-status'}`}>
+          <div className="customer-card-header" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '12px', marginBottom: '12px' }}>
+            <div className="customer-title-block">
+              <span className="customer-card-title" style={{ fontSize: '20px' }}>{customer.title}</span>
               <span className={`status-badge ${active ? 'badge-active' : 'badge-completed'}`}>
                 {active ? '進行中' : '施行完了'}
               </span>
             </div>
+            
             <div className="customer-card-actions">
               <button 
                 type="button"
@@ -661,66 +666,60 @@ export default function CustomerDirectory({
               </div>
 
               {!isEditing ? (
-                <div className="customer-details-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginTop: '12px' }}>
-                  <div className="detail-item" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                    <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>故人名</span>
-                    <span style={{ flex: 1, fontSize: '13px' }}>{customer.deceasedLastName || customer.deceasedFirstName ? `${customer.deceasedLastName || ''} ${customer.deceasedFirstName || ''}` : (customer.deceasedName || '未登録')}</span>
-                  </div>
-                  <div className="detail-item" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                    <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>喪主名</span>
-                    <span style={{ flex: 1, fontSize: '13px' }}>{customer.mournerLastName || customer.mournerFirstName ? `${customer.mournerLastName || ''} ${customer.mournerFirstName || ''}` : (customer.mournerName || '未登録')}</span>
-                  </div>
-                  <div className="detail-item" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                    <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>生年月日</span>
-                    <span style={{ flex: 1, fontSize: '13px' }}>{customer.birthDate || '未登録'}</span>
-                  </div>
-                  <div className="detail-item" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                    <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>連絡先</span>
-                    <span style={{ flex: 1, fontSize: '13px' }}>{customer.contact || '未登録'}</span>
-                  </div>
-                  <div className="detail-item" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                    <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>逝去日</span>
-                    <span style={{ flex: 1, fontSize: '13px' }}>{customer.deathDate || '未登録'}</span>
-                  </div>
-                  <div className="detail-item" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                    <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>住所</span>
-                    <span style={{ flex: 1, fontSize: '13px' }}>{customer.address || '未登録'}</span>
-                  </div>
-                  <div className="detail-item" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                    <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>寺院名</span>
-                    <span style={{ flex: 1, fontSize: '13px' }}>{customer.templeName || '未登録'}</span>
-                  </div>
-                  <div className="detail-item" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                    <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>宗派</span>
-                    <span style={{ flex: 1, fontSize: '13px' }}>{customer.sect || '未登録'}</span>
-                  </div>
-                  <div className="detail-item" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                    <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>通夜日</span>
-                    <span style={{ flex: 1, fontSize: '13px' }}>{customer.wakeDate || '未登録'}</span>
-                  </div>
-                  <div className="detail-item" style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                    <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>葬儀日</span>
-                    <span style={{ flex: 1, fontSize: '13px' }}>{customer.funeralDate || '未登録'}</span>
-                  </div>
-                  {(() => {
-                    const ageInfo = calculateAge(customer.birthDate, customer.deathDate);
-                    if (!ageInfo) return null;
-                    return (
-                      <div className="detail-item age-row" style={{ display: 'flex', backgroundColor: 'rgba(212, 175, 55, 0.08)', border: '1px solid rgba(212, 175, 55, 0.2)', padding: '8px', borderRadius: '6px', marginTop: '4px' }}>
-                        <span style={{ width: '90px', fontWeight: 'bold', color: 'var(--color-gold-light)', fontSize: '12px' }}>年齢計算</span>
-                        <span style={{ flex: 1, fontSize: '12px', fontWeight: 'bold' }}>
-                          行年（満）：{ageInfo.fullAge}歳 / 享年（数え）：{ageInfo.countAge}歳
-                        </span>
-                      </div>
-                    );
-                  })()}
-                  {customer.notes && (
-                    <div className="detail-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                      <span style={{ fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '13px' }}>全体備考</span>
-                      <span style={{ fontSize: '13px', whiteSpace: 'pre-wrap' }}>{customer.notes}</span>
-                    </div>
-                  )}
-                </div>
+                <table className="customer-details-table">
+                  <tbody>
+                    <tr>
+                      <th>故人名</th>
+                      <td>{customer.deceasedLastName || customer.deceasedFirstName ? `${customer.deceasedLastName || ''} ${customer.deceasedFirstName || ''}` : (customer.deceasedName || '未登録')}</td>
+                      <th>喪主名</th>
+                      <td>{customer.mournerLastName || customer.mournerFirstName ? `${customer.mournerLastName || ''} ${customer.mournerFirstName || ''}` : (customer.mournerName || '未登録')}</td>
+                    </tr>
+                    <tr>
+                      <th>生年月日</th>
+                      <td>{customer.birthDate || '未登録'}</td>
+                      <th>連絡先</th>
+                      <td>{customer.contact || '未登録'}</td>
+                    </tr>
+                    <tr>
+                      <th>逝去日</th>
+                      <td>{customer.deathDate || '未登録'}</td>
+                      <th>住所</th>
+                      <td>{customer.address || '未登録'}</td>
+                    </tr>
+                    <tr>
+                      <th>寺院名</th>
+                      <td>{customer.templeName || '未登録'}</td>
+                      <th>宗派</th>
+                      <td>{customer.sect || '未登録'}</td>
+                    </tr>
+                    <tr>
+                      <th>通夜日</th>
+                      <td>{customer.wakeDate || '未登録'}</td>
+                      <th>葬儀日</th>
+                      <td>{customer.funeralDate || '未登録'}</td>
+                    </tr>
+                    {(() => {
+                      const ageInfo = calculateAge(customer.birthDate, customer.deathDate);
+                      if (!ageInfo) return null;
+                      return (
+                        <tr style={{ backgroundColor: 'rgba(212, 175, 55, 0.08)' }}>
+                          <th>自動計算年齢</th>
+                          <td colSpan="3">
+                            <strong style={{ color: 'var(--color-gold-light)' }}>行年（満年齢）：{ageInfo.fullAge}歳</strong>
+                            <span style={{ margin: '0 12px', color: 'var(--text-muted)' }}>/</span>
+                            <strong style={{ color: 'var(--color-gold-light)' }}>享年（数え年）：{ageInfo.countAge}歳</strong>
+                          </td>
+                        </tr>
+                      );
+                    })()}
+                    {customer.notes && (
+                      <tr>
+                        <th>全体備考</th>
+                        <td colSpan="3" style={{ whiteSpace: 'pre-wrap' }}>{customer.notes}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               ) : (
                 <div className="inline-edit-form-grid">
                   <div className="edit-form-group span-2">
@@ -1323,6 +1322,7 @@ export default function CustomerDirectory({
               </div>
             </div>
           </div>
+        </div>
 
         {/* 予定ごとの写真拡大モーダル */}
         {eventPreviewImage && (
@@ -1381,9 +1381,13 @@ export default function CustomerDirectory({
             </div>
           </div>
         )}
-        </>
-      ) : (
-        <>
+      </div>
+    );
+  }
+
+  // --- 顧客一覧ビューのレンダリング (デフォルト) ---
+  return (
+    <div className="customer-directory fade-in">
       <div className="directory-header-controls">
         <h2 className="directory-title">👤 顧客名簿・基本情報管理</h2>
         
@@ -1601,14 +1605,11 @@ export default function CustomerDirectory({
       <style>{`
         .customer-directory {
           padding: 16px;
-          padding-bottom: 120px;
+          padding-bottom: 90px;
           display: flex;
           flex-direction: column;
           flex: 1;
           overflow-y: auto;
-          -webkit-overflow-scrolling: touch;
-          min-height: 0;
-          max-height: 100%;
         }
 
         .directory-header-controls {
@@ -1740,7 +1741,6 @@ export default function CustomerDirectory({
 
         .directory-customer-card.detail-mode {
           border-left-width: 6px;
-          display: block;
         }
 
         /* 詳細画面ヘッダー */
@@ -2026,8 +2026,6 @@ export default function CustomerDirectory({
           <option key={idx} value={s} />
         ))}
       </datalist>
-        </>
-      )}
     </div>
   );
 }
