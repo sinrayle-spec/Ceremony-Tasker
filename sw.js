@@ -42,10 +42,16 @@ self.addEventListener('fetch', (event) => {
     }
   }
 
+  // sw.js自身へのリクエストはサービスワーカーのキャッシュ制御を通さずそのまま通信させる
+  if (event.request.url.includes('sw.js')) {
+    return;
+  }
+
   // HTML ファイル（特に index.html）へのリクエストは Network-First で処理（常に最新のJSハッシュを優先ロード）
   const isHtmlRequest = event.request.headers.get('accept')?.includes('text/html') || 
                         event.request.url.endsWith('/') || 
-                        event.request.url.endsWith('index.html');
+                        event.request.url.endsWith('index.html') ||
+                        event.request.url.endsWith('Ceremony-Tasker');
 
   if (isHtmlRequest) {
     event.respondWith(
