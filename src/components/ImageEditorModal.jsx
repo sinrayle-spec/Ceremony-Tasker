@@ -4,13 +4,14 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   
-  const [tool, setTool] = useState('pen'); // 'pen', 'eraser', 'text'
+  const [tool, setTool] = useState('pen'); // 'pen', 'eraser', 'text', 'pan' (移動)
   const [color, setColor] = useState('#e11d48'); // デフォルト赤色
   const [brushSize, setBrushSize] = useState(4);
   const [isDrawing, setIsDrawing] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [scale, setScale] = useState(1.0); // ズーム率 (1.0 = 100%)
 
   const lastPos = useRef({ x: 0, y: 0 });
   const bgImageRef = useRef(null);
@@ -62,6 +63,10 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
 
   // 描画開始
   const startDrawing = (e) => {
+    if (tool === 'pan') {
+      setIsDrawing(false);
+      return;
+    }
     if (tool === 'text') {
       const pos = getCoordinates(e);
       lastPos.current = pos;
@@ -75,6 +80,7 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
 
   // 描画中
   const draw = (e) => {
+    if (tool === 'pan') return;
     if (!isDrawing || tool === 'text') return;
     
     // スクロールを防止する
@@ -169,39 +175,57 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
 
         {/* キャンバス表示領域 */}
         <div className="canvas-wrapper">
-          <canvas
-            ref={canvasRef}
-            width={canvasSize.width}
-            height={canvasSize.height}
-            onMouseDown={startDrawing}
-            onMouseMove={draw}
-            onMouseUp={stopDrawing}
-            onMouseLeave={stopDrawing}
-            onTouchStart={startDrawing}
-            onTouchMove={draw}
-            onTouchEnd={stopDrawing}
-            className="editor-canvas"
-          />
+          <div 
+            className="zoom-container" 
+            style={{ 
+              width: `${canvasSize.width * scale}px`, 
+              height: `${canvasSize.height * scale}px`,
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+          >
+            <canvas
+              ref={canvasRef}
+              width={canvasSize.width}
+              height={canvasSize.height}
+              onMouseDown={startDrawing}
+              onMouseMove={draw}
+              onMouseUp={stopDrawing}
+              onMouseLeave={stopDrawing}
+              onTouchStart={startDrawing}
+              onTouchMove={draw}
+              onTouchEnd={stopDrawing}
+              className="editor-canvas"
+              style={{
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                touchAction: tool === 'pan' ? 'auto' : 'none'
+              }}
+            />
 
-          {/* テキスト入力ポップアップ */}
-          {showTextInput && (
-            <div className="canvas-text-input-overlay">
-              <form onSubmit={handleAddTextSubmit} className="text-input-form">
-                <input
-                  type="text"
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  placeholder="入力して確定してください..."
-                  autoFocus
-                  className="canvas-inline-input"
-                />
-                <div className="form-btns">
-                  <button type="submit" className="text-confirm-btn">確定</button>
-                  <button type="button" onClick={() => setShowTextInput(false)} className="text-cancel-btn">取消</button>
-                </div>
-              </form>
-            </div>
-          )}
+            {/* テキスト入力ポップアップ */}
+            {showTextInput && (
+              <div className="canvas-text-input-overlay">
+                <form onSubmit={handleAddTextSubmit} className="text-input-form">
+                  <input
+                    type="text"
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    placeholder="入力して確定してください..."
+                    autoFocus
+                    className="canvas-inline-input"
+                  />
+                  <div className="form-btns">
+                    <button type="submit" className="text-confirm-btn">確定</button>
+                    <button type="button" onClick={() => setShowTextInput(false)} className="text-cancel-btn">取消</button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ツールバー */}
@@ -230,6 +254,13 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
                 onClick={() => setTool('text')}
               >
                 🔤 文字入れ
+              </button>
+              <button 
+                type="button" 
+                className={`tool-btn ${tool === 'pan' ? 'active' : ''}`}
+                onClick={() => setTool('pan')}
+              >
+                ✋ 移動
               </button>
             </div>
           </div>
@@ -275,6 +306,25 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
                   {b.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* ズームスライダー */}
+          <div className="toolbar-row">
+            <span className="row-label">ズーム:</span>
+            <div className="zoom-slider-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+              <input 
+                type="range" 
+                min="1.0" 
+                max="3.0" 
+                step="0.1" 
+                value={scale} 
+                onChange={(e) => setScale(parseFloat(e.target.value))} 
+                style={{ flex: 1, accentColor: 'var(--color-gold)', height: '8px', outline: 'none' }}
+              />
+              <span style={{ fontSize: '11px', fontWeight: 'bold', width: '32px', textAlign: 'right' }}>
+                {Math.round(scale * 100)}%
+              </span>
             </div>
           </div>
         </div>
@@ -348,12 +398,9 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
         .canvas-wrapper {
           position: relative;
           background-color: #000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-          min-height: 260px;
-          max-height: 50vh;
+          overflow: auto;
+          min-height: 300px;
+          height: 55vh;
         }
 
         .editor-canvas {
