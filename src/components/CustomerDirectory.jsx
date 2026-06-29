@@ -1609,9 +1609,11 @@ export default function CustomerDirectory({
           display: flex;
           flex-direction: column;
           flex: 1;
-          overflow-y: auto;
+          overflow-y: scroll;
           min-height: 0;
+          height: 100%;
           -webkit-overflow-scrolling: touch;
+          touch-action: pan-y;
         }
 
         .directory-header-controls {
