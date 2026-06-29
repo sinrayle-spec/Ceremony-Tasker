@@ -1605,12 +1605,12 @@ export default function CustomerDirectory({
       <style>{`
         .customer-directory {
           padding: 16px;
-          padding-bottom: 90px;
-          display: flex;
-          flex-direction: column;
-          flex: 1;
-          min-height: 0;
-          overflow: hidden;
+          padding-bottom: 120px;
+          display: block;
+          height: 100%;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          box-sizing: border-box;
         }
 
         .directory-header-controls {
@@ -1742,11 +1742,7 @@ export default function CustomerDirectory({
 
         .directory-customer-card.detail-mode {
           border-left-width: 6px;
-          overflow-y: auto;
-          flex: 1;
-          min-height: 0;
-          -webkit-overflow-scrolling: touch;
-          padding-bottom: 40px;
+          display: block;
         }
 
         /* 詳細画面ヘッダー */
