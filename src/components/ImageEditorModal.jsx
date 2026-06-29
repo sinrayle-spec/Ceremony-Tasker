@@ -240,58 +240,46 @@ export default function ImageEditorModal({ imageData, onSave, onClose }) {
         </div>
 
         {/* キャンバス表示領域 */}
-        <div className="canvas-wrapper">
-          <div 
-            className="zoom-container" 
-            style={{ 
-              width: `${canvasSize.width * scale}px`, 
+        <div className="canvas-wrapper" style={{ position: 'relative' }}>
+          <canvas
+            ref={canvasRef}
+            width={canvasSize.width}
+            height={canvasSize.height}
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            className="editor-canvas"
+            style={{
+              width: `${canvasSize.width * scale}px`,
               height: `${canvasSize.height * scale}px`,
-              position: 'relative',
-              overflow: 'hidden'
+              display: 'block',
+              touchAction: tool === 'zoom' ? 'auto' : 'none'
             }}
-          >
-            <canvas
-              ref={canvasRef}
-              width={canvasSize.width}
-              height={canvasSize.height}
-              onMouseDown={startDrawing}
-              onMouseMove={draw}
-              onMouseUp={stopDrawing}
-              onMouseLeave={stopDrawing}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              className="editor-canvas"
-              style={{
-                transform: `scale(${scale})`,
-                transformOrigin: 'top left',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                touchAction: tool === 'zoom' ? 'auto' : 'none'
-              }}
-            />
+          />
 
-            {/* テキスト入力ポップアップ */}
-            {showTextInput && (
-              <div className="canvas-text-input-overlay">
-                <form onSubmit={handleAddTextSubmit} className="text-input-form">
-                  <input
-                    type="text"
-                    value={textInput}
-                    onChange={(e) => setTextInput(e.target.value)}
-                    placeholder="入力して確定してください..."
-                    autoFocus
-                    className="canvas-inline-input"
-                  />
-                  <div className="form-btns">
-                    <button type="submit" className="text-confirm-btn">確定</button>
-                    <button type="button" onClick={() => setShowTextInput(false)} className="text-cancel-btn">取消</button>
-                  </div>
-                </form>
-              </div>
-            )}
-          </div>
+          {/* テキスト入力ポップアップ */}
+          {showTextInput && (
+            <div className="canvas-text-input-overlay">
+              <form onSubmit={handleAddTextSubmit} className="text-input-form">
+                <input
+                  type="text"
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  placeholder="入力して確定してください..."
+                  autoFocus
+                  className="canvas-inline-input"
+                />
+                <div className="form-btns">
+                  <button type="submit" className="text-confirm-btn">確定</button>
+                  <button type="button" onClick={() => setShowTextInput(false)} className="text-cancel-btn">取消</button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
 
         {/* ツールバー */}
