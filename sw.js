@@ -3,7 +3,9 @@ const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
-  './icon.svg'
+  './icon.svg',
+  './assets/index-C8DOYyS4.css',
+  './assets/index-CIEGjvrM.js'
 ];
 
 // サービスワーカーインストール時に静的アセットをキャッシュ
