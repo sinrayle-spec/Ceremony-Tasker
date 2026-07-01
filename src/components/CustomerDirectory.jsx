@@ -471,6 +471,19 @@ export default function CustomerDirectory({
     });
   };
 
+  // 予定の発注ステータス（済/未）を切り替える関数
+  const toggleEventOrderedInline = (customer, eventId) => {
+    const updatedEvents = (customer.events || []).map(e => {
+      if (e.id === eventId) {
+        return { ...e, ordered: !e.ordered };
+      }
+      return e;
+    });
+    onUpdateCustomer(customer.id, {
+      events: updatedEvents
+    });
+  };
+
   // Inline add event to customer card
   const handleAddEventInline = (customer) => {
     if (!newEventDate) {
@@ -925,13 +938,42 @@ export default function CustomerDirectory({
                         style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <label className="event-row-label">
+                          <label className="event-row-label" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                             <input 
                               type="checkbox" 
                               checked={false} 
                               onChange={() => toggleEventCompleteInline(customer, evt.id)} 
                               className="event-checkbox"
                             />
+                            
+                            {/* 発注ステータス切り替えチェックボックス */}
+                            <label 
+                              className="ordered-toggle-label" 
+                              style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '4px', 
+                                fontSize: '11px', 
+                                cursor: 'pointer', 
+                                color: evt.ordered ? 'var(--color-gold)' : 'var(--text-secondary)',
+                                padding: '2px 6px',
+                                backgroundColor: evt.ordered ? 'rgba(217, 119, 6, 0.15)' : 'rgba(255,255,255,0.02)',
+                                borderRadius: '4px',
+                                border: evt.ordered ? '1px solid rgba(217, 119, 6, 0.3)' : '1px solid var(--border-color)',
+                                transition: 'all 0.2s ease',
+                                userSelect: 'none'
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input 
+                                type="checkbox" 
+                                checked={evt.ordered || false} 
+                                onChange={() => toggleEventOrderedInline(customer, evt.id)} 
+                                style={{ cursor: 'pointer', margin: 0 }}
+                              />
+                              <span>発注{evt.ordered ? '済' : '未'}</span>
+                            </label>
+
                             <span className={`badge badge-${getCategoryColor(evt.category)}`}>{evt.category}</span>
                             <span className="event-datetime">📅 {evt.date} {evt.time ? `🕒 ${evt.time}` : ''}</span>
                             {evt.notes && <span className="event-notes-label">({evt.notes})</span>}
